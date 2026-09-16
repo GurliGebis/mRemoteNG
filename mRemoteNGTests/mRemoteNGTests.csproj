@@ -12,7 +12,11 @@
     <Platforms>x86;x64;arm64</Platforms>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <Configurations>Debug;Release;Debug Portable;Release Portable;Release Installer;Deploy to github</Configurations>
-    <SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
+    <!-- Must not exceed the app's own floor in mRemoteNG.csproj. Set higher, the test host
+         refuses to start on any older Windows, so a contributor on Windows 10 or on 11 23H2
+         cannot run the suite at all - on a project whose product supports those versions.
+         Reported by Jason Finch in PR #154. -->
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
   </PropertyGroup>
   <ItemGroup>
