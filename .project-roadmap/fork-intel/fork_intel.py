@@ -31,9 +31,11 @@ if sys.platform == "win32":
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
+import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -658,73 +660,59 @@ AGENT_ARGS = {
 }
 
 
-GROK_MODEL = "grok-4.5"
-GROK_ENDPOINT = "https://api.x.ai/v1/chat/completions"
+GROK_MODEL = "grok-4.6"
 
 
 def grok_run(prompt, timeout=600, model=GROK_MODEL):
-    """Ask xAI Grok through the OpenAI-compatible REST API.
+    """Ask Grok through the official Grok Build CLI.
 
-    Grok has no CLI, so this posts JSON with curl. The key comes from the
-    XAI_API_KEY environment variable and is never written to disk or logged.
+    Grok used to have no CLI and this went out as a REST call with curl. It has one
+    now, and the difference is not cosmetic: with XAI_API_KEY present in the
+    environment the CLI announces "You are using XAI_API_KEY" and bills the metered
+    API, while without it the same binary reports "You are logged in with grok.com"
+    and draws on the subscription. A review pass over several hundred candidates is
+    exactly where that distinction stops being academic, so the key is stripped from
+    the child's environment here.
+
+    The prompt goes through a file rather than an argument: a diff-sized payload does
+    not fit on a command line, and the shell available here mangles '$' inside inline
+    text.
     """
-    import os
-    import tempfile
-
-    if not os.environ.get("XAI_API_KEY"):
-        log("  ! XAI_API_KEY is not set, skipping grok")
+    exe = shutil.which("grok")
+    if not exe:
+        log("  ! grok CLI is not on PATH, skipping")
         return None
-    # Left to itself the model answers with reasoning prose ("Inspecting the target
-    # file...") and the verdict never arrives, which the panel then reads as silence.
-    # A system turn plus json_object output makes the format non-optional.
-    payload = {
-        "model": model,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system",
-             "content": "You reply with exactly one JSON object and no other text."},
-            {"role": "user", "content": prompt},
-        ],
-    }
-    # The body goes through a temp file: a diff-sized payload does not fit in an
-    # argument, and shells here mangle '$' inside inline JSON.
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False,
+
+    env = dict(os.environ)
+    env.pop("XAI_API_KEY", None)  # subscription, not metered API
+
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False,
                                      encoding="utf-8") as handle:
-        json.dump(payload, handle)
-        body_path = handle.name
+        handle.write(prompt)
+        prompt_path = handle.name
     try:
         proc = subprocess.run(
-            ["curl", "-s", "-S", GROK_ENDPOINT,
-             "-H", "Authorization: Bearer " + os.environ["XAI_API_KEY"],
-             "-H", "Content-Type: application/json",
-             "--data-binary", "@" + body_path],
+            [exe, "--prompt-file", prompt_path, "--output-format", "json",
+             "--model", model, "--no-subagents"],
             capture_output=True, text=True, timeout=timeout,
-            encoding="utf-8", errors="replace")
+            encoding="utf-8", errors="replace", env=env)
     except (subprocess.TimeoutExpired, OSError) as exc:
         log(f"  ! grok failed: {exc}")
         return None
     finally:
         try:
-            Path(body_path).unlink()
+            os.unlink(prompt_path)
         except OSError:
             pass
 
     if proc.returncode != 0:
-        log(f"  ! grok curl exit {proc.returncode}: {(proc.stderr or '').strip()[:160]}")
+        log(f"  ! grok exit {proc.returncode}: {(proc.stderr or '').strip()[:160]}")
         return None
     try:
-        data = json.loads(proc.stdout)
-    except json.JSONDecodeError:
-        log("  ! grok returned non-JSON")
-        return None
-    if "error" in data:
-        log(f"  ! grok api error: {str(data['error'])[:160]}")
-        return None
-    try:
-        return data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError):
-        log("  ! grok response had no message content")
-        return None
+        return json.loads(proc.stdout).get("text")
+    except (json.JSONDecodeError, AttributeError):
+        # Older builds print the answer directly rather than wrapping it.
+        return (proc.stdout or "").strip() or None
 
 
 def agent_run(agent, prompt, timeout=600):
@@ -937,25 +925,20 @@ Our fork robertpopa22/mRemoteNG is a maintained community fork of mRemoteNG:
   speculative rewrites, features that duplicate what we already implemented differently
 - every import must survive full build + full test suite and be maintainable by us"""
 
-REVIEW_TEMPLATE = """\
+PATCH_REVIEW_LIMIT = 8000
+
+REVIEW_HEAD = """\
 Read-only review - this is a COUNTER-OPINION ONLY. Do NOT modify any files, do NOT build, \
 do NOT run git add/git commit/git push or any other repository-mutating command. \
-Judge independently; do not assume the analysis you are shown is correct.
+Judge independently from the diff and this repository; do not take anyone else's analysis on trust.
 
 {direction}
 
 A commit from a third-party fork is proposed for import into our fork. Decide whether it \
 should be pre-approved for a human to land.
+"""
 
-fork: {fork}
-commit: {sha}
-subject: {subject}
-files ({nfiles}, +{adds}/-{dels}): {files}
-prior automated triage (may be wrong): {triage}
-
-diff (truncated):
-{patch}
-
+REVIEW_TAIL = """\
 Answer with EXACTLY one JSON object and nothing else:
 {{"vote":"APPROVE|REJECT|NEEDS_HUMAN","aligned_with_direction":true|false,\
 "concern":"<the single biggest risk, <= 25 words>","reason":"<why, <= 30 words>"}}
@@ -963,6 +946,91 @@ Answer with EXACTLY one JSON object and nothing else:
 Vote APPROVE only if the change is genuinely useful to THIS fork, is unlikely to already \
 be implemented here, and is small and clear enough that a maintainer can verify it quickly. \
 Vote NEEDS_HUMAN when it is valuable but needs judgement. Default to REJECT when unsure."""
+
+# The informed ballot: it carries the prior triage verdict.
+REVIEW_TEMPLATE = REVIEW_HEAD + """
+fork: {fork}
+commit: {sha}
+subject: {subject}
+files ({nfiles}, +{adds}/-{dels}): {files}
+prior automated triage (may be wrong): {triage}
+
+diff:
+{patch}
+
+""" + REVIEW_TAIL
+
+# The blind ballot. Every reviewer used to receive a byte-identical prompt carrying the
+# same triage verdict, which is a shared anchor on every vote in the panel: agreement
+# then partly measures the anchor rather than the change. At least one reviewer sees
+# the diff with no prior verdict attached.
+REVIEW_TEMPLATE_BLIND = REVIEW_HEAD + """
+fork: {fork}
+commit: {sha}
+subject: {subject}
+files ({nfiles}, +{adds}/-{dels}): {files}
+
+diff:
+{patch}
+
+""" + REVIEW_TAIL
+
+# A commit and the commit that later reverted it cannot be judged apart: alone, the revert
+# reads as noise, and together they are the clearest signal in the set - somebody tried
+# this and took it back. This is one stateless prompt holding both diffs in order, not a
+# conversation: a multi-turn session buys the same understanding and adds anchoring and
+# drift, and a model that has already committed to a verdict defends it.
+REVIEW_TEMPLATE_CHAIN = REVIEW_HEAD + """
+These commits are one sequence from the same fork, in order. The later ones act on the
+earlier ones - a revert, a fix-up, a second attempt. Judge the sequence as a whole: what
+is left standing after all of it, and whether THAT is worth importing.
+
+fork: {fork}
+
+{chain}
+
+""" + REVIEW_TAIL
+
+CHAIN_ENTRY = """\
+--- {position}. commit {sha} ---
+subject: {subject}
+files ({nfiles}, +{adds}/-{dels}): {files}
+
+diff:
+{patch}
+"""
+
+# Round two, and only on a split. Arguments are anonymised so that deference to a brand
+# does not stand in for judgement, and the session is fresh so that no reviewer is
+# defending words it has already said.
+ROUND2_TEMPLATE = """\
+Read-only review - COUNTER-OPINION ONLY. Do NOT modify files, build, or run any \
+repository-mutating command.
+
+{direction}
+
+You are re-deciding one import candidate. Independent reviewers disagreed about it. \
+Their arguments are below, unattributed and in no meaningful order. Judge the ARGUMENTS \
+on their merits against the diff and this repository - not by how confident any of them \
+sounds, and not by counting them.
+
+fork: {fork}
+commit: {sha}
+subject: {subject}
+files ({nfiles}, +{adds}/-{dels}): {files}
+
+diff:
+{patch}
+
+What the reviewers argued:
+{arguments}
+
+Answer with EXACTLY one JSON object and nothing else:
+{{"vote":"APPROVE|REJECT|NEEDS_HUMAN","aligned_with_direction":true|false,\
+"concern":"<the single biggest risk, <= 25 words>","reason":"<why, <= 30 words>"}}
+
+Change your mind if an argument is better than your reasoning; keep your position if it \
+is not. Default to REJECT when unsure."""
 
 
 def extract_json_object(text):
@@ -987,13 +1055,29 @@ def extract_json_object(text):
     return parsed if isinstance(parsed, dict) else None
 
 
-def votes_are_split(votes):
-    """True when reviewers disagree - the case a third opinion can settle.
+ERROR_VOTE = "NO_ANSWER"
 
-    Unanimous approval or unanimous refusal needs no arbiter. A reviewer that
-    failed to answer is not a disagreement either: nothing was said.
+
+def answered_votes(votes):
+    """The ballots that actually carry a judgement.
+
+    A reviewer that timed out, crashed or answered unparsable text said nothing. That is
+    not dissent and it is certainly not consent - it is an absence, and it has to be
+    counted as one so a broken CLI can never be mistaken for a quiet yes.
     """
-    answered = [v.get("vote") for v in votes if v.get("vote") not in (None, "NO_ANSWER")]
+    return [v for v in votes if v.get("vote") not in (None, ERROR_VOTE)]
+
+
+def votes_are_split(votes):
+    """True when the reviewers disagree about something that changes the outcome.
+
+    The disagreement that matters is APPROVE against anything else, and it counts at
+    any margin - a lone dissenter among three is still a split, not a rounding error.
+    REJECT against NEEDS_HUMAN is a real difference of opinion but not one the gate can
+    act on: neither is an approval, so the candidate goes to a human either way and a
+    second round would spend quota without being able to change anything.
+    """
+    answered = [v["vote"] for v in answered_votes(votes)]
     if len(answered) < 2:
         return False
     approvals = sum(1 for v in answered if v == "APPROVE")
@@ -1003,31 +1087,89 @@ def votes_are_split(votes):
 def consensus_decision(votes, has_security_flags):
     """Decide whether a change may skip a full manual investigation.
 
-    Without an arbiter the rule is unanimity. When a third opinion was fetched to
-    settle a split, a clear majority is enough - that is the whole point of asking.
-    A missing or unparsable answer counts as dissent, never as consent, and a
-    security flag can never be voted away.
+    Unanimity among the reviewers who answered, and at least two of them. A security
+    flag can never be voted away, and a candidate nobody could review is held rather
+    than waved through: for an import gate into a credential manager a false APPROVE
+    costs far more than a false hold.
     """
-    if not votes or has_security_flags:
+    if has_security_flags:
         return "manual-review"
-    if any(v.get("aligned") is False for v in votes):
+    answered = answered_votes(votes)
+    if len(answered) < 2:
+        return "held"
+    if any(v.get("aligned") is False for v in answered):
         return "manual-review"
-
-    approvals = sum(1 for v in votes if v.get("vote") == "APPROVE")
-    if approvals == len(votes):
-        return "pre-approved"
-    if any(v.get("arbiter") for v in votes) and approvals > len(votes) / 2:
+    if all(v.get("vote") == "APPROVE" for v in answered):
         return "pre-approved"
     return "manual-review"
+
+
+def patch_was_truncated(cand, limit):
+    """Whether the reviewers were shown less than the whole diff."""
+    return len(cand.get("patch") or "") > limit
+
+
+def revert_subject(subject):
+    """The subject a commit claims to be reverting, if it says so."""
+    match = re.match(r'^Revert\s+"(.+)"\s*$', (subject or "").strip(), re.DOTALL)
+    return match.group(1).strip() if match else None
+
+
+def build_chains(pending):
+    """Group a commit with the commit that later reverted it.
+
+    Only git ancestry within one fork, never a looser 'same author, same area' notion:
+    a wider grouping would hand one prompt several unrelated judgements and turn N
+    independent verdicts into one correlated verdict repeated N times.
+
+    Pairing happens before any chain is emitted. Deciding as we walk the list would
+    close the original into a chain of its own whenever it happened to be listed ahead
+    of the revert that names it.
+    """
+    by_subject = {}
+    for item in pending:
+        cand = item[1]
+        by_subject.setdefault((cand["fork"], (cand.get("subject") or "").strip()), item)
+
+    partner = {}
+    for item in pending:
+        cand = item[1]
+        reverted = revert_subject(cand.get("subject"))
+        if not reverted:
+            continue
+        original = by_subject.get((cand["fork"], reverted))
+        if original is None or original is item:
+            continue
+        if id(original) in partner or id(item) in partner:
+            continue
+        partner[id(original)] = item
+        partner[id(item)] = original
+
+    seen, chains = set(), []
+    for item in pending:
+        if id(item) in seen:
+            continue
+        mate = partner.get(id(item))
+        if mate is None:
+            seen.add(id(item))
+            chains.append([item])
+            continue
+        # The revert is the one whose subject names the other; the original leads.
+        first, second = (item, mate) if revert_subject(mate[1].get("subject")) else (mate, item)
+        seen.add(id(first))
+        seen.add(id(second))
+        chains.append([first, second])
+    return chains
 
 
 def cmd_preapprove(args):
     """Ask independent model families to vote on each import candidate.
 
-    Pre-approval is a consensus gate, not an import: unanimous APPROVE from every
-    reviewer, plus no security flag, means a maintainer can land the change after a
-    quick read instead of a full investigation. Any dissent routes it to manual review
-    and the dissenting reason is kept and shown.
+    The gate is a consensus of families, so it is only worth what its independence is
+    worth. Three things protect that here: the family that ran triage does not vote on
+    its own triage, at least one ballot is cast blind without the triage verdict
+    attached, and a commit judged together with its revert is judged in a single
+    stateless prompt rather than a running conversation.
     """
     meta = load_meta()
     rules = load_rules()
@@ -1039,11 +1181,13 @@ def cmd_preapprove(args):
         log("! the same reviewer is listed twice - that is one opinion, not two")
         return 2
 
-    # The whole point of an arbiter is a family that has not already spoken. If it
-    # is also a reviewer, a split would be settled by the same model voting twice.
+    # Whoever audits a unanimous verdict must not be one of the voices that produced it,
+    # or the check is the same model agreeing with itself. With three families and the
+    # triage family rotated out of each panel, the rotated-out one is exactly that
+    # outsider - no fourth subscription required.
     arbiter = args.arbiter.strip()
     if arbiter and arbiter in reviewers:
-        log(f"! {arbiter} is already a reviewer - arbitration disabled for this run")
+        log(f"! {arbiter} also votes; the rotated-out family will audit instead")
         arbiter = ""
 
     pending = []
@@ -1052,10 +1196,7 @@ def cmd_preapprove(args):
             continue
         existing = cand.get("preapproval")
         if existing and args.only_incomplete:
-            # A reviewer that timed out or crashed leaves a NO_ANSWER, which the
-            # consensus rule treats as dissent. That is safe but not a judgement:
-            # re-run those with a working panel instead of leaving them buried.
-            if not any(v.get("vote") == "NO_ANSWER" for v in existing.get("votes", [])):
+            if not any(v.get("vote") == ERROR_VOTE for v in existing.get("votes", [])):
                 continue
         elif existing and not args.refresh:
             continue
@@ -1067,66 +1208,155 @@ def cmd_preapprove(args):
         # maintainer whether the diff is worth their reading time at all.
         if tier in ("A", "B", "Q"):
             pending.append((path, cand, tier))
+
+    chains = build_chains(pending)
     if args.limit:
-        pending = pending[:args.limit]
-    if not pending:
+        chains = chains[:args.limit]
+    if not chains:
         log("Nothing to pre-approve.")
         return 0
 
-    log(f"Pre-approving {len(pending)} candidates with reviewers: {', '.join(reviewers)}")
-    approved = manual = 0
-    for path, cand, tier in pending:
-        stats = cand.get("stats") or {}
-        triage = cand.get("triage") or {}
-        prompt = REVIEW_TEMPLATE.format(
-            direction=PROJECT_DIRECTION,
-            fork=cand["fork"], sha=cand["sha"], subject=cand.get("subject"),
-            nfiles=stats.get("files"), adds=stats.get("additions"), dels=stats.get("deletions"),
-            files=", ".join(f["filename"] for f in cand.get("files", [])[:12]),
-            triage=f"{triage.get('category')} value={triage.get('value')} "
-                   f"risk={triage.get('risk')} action={triage.get('action')}",
-            patch=(cand.get("patch") or "")[:8000])
+    total = sum(len(c) for c in chains)
+    log(f"Pre-approving {total} candidates in {len(chains)} units "
+        f"with reviewers: {', '.join(reviewers)}"
+        + (f" (audit/arbiter: {arbiter})" if arbiter else ""))
 
-        def collect(reviewer, arbiter=False):
+    approved = manual = held = audited = flipped = 0
+    for unit in chains:
+        lead_path, lead, tier = unit[0]
+        security = any(c.get("security_flags") for _, c, _ in unit)
+        truncated = any(patch_was_truncated(c, PATCH_REVIEW_LIMIT) for _, c, _ in unit)
+
+        # The triage family does not review its own triage. fork_intel triages with
+        # --agent claude by default, so without this the same family judges twice and
+        # the panel is one opinion narrower than it looks.
+        triaged_by = {(c.get("triage") or {}).get("agent") for _, c, _ in unit}
+        panel = [r for r in reviewers if r not in triaged_by]
+        skipped = [r for r in reviewers if r in triaged_by]
+        if len(panel) < 2:
+            # Rotating everyone out would leave no panel at all; fall back to the full
+            # list and record that this verdict is not rotation-clean.
+            panel, skipped = reviewers, []
+
+        def render(template, blind=False, **extra):
+            if len(unit) > 1:
+                entries = []
+                for position, (_, c, _) in enumerate(unit, start=1):
+                    st = c.get("stats") or {}
+                    entries.append(CHAIN_ENTRY.format(
+                        position=position, sha=c["sha"], subject=c.get("subject"),
+                        nfiles=st.get("files"), adds=st.get("additions"),
+                        dels=st.get("deletions"),
+                        files=", ".join(f["filename"] for f in c.get("files", [])[:12]),
+                        patch=(c.get("patch") or "")[:PATCH_REVIEW_LIMIT]))
+                return REVIEW_TEMPLATE_CHAIN.format(
+                    direction=PROJECT_DIRECTION, fork=lead["fork"],
+                    chain="\n".join(entries))
+            st = lead.get("stats") or {}
+            fields = dict(
+                direction=PROJECT_DIRECTION, fork=lead["fork"], sha=lead["sha"],
+                subject=lead.get("subject"), nfiles=st.get("files"),
+                adds=st.get("additions"), dels=st.get("deletions"),
+                files=", ".join(f["filename"] for f in lead.get("files", [])[:12]),
+                patch=(lead.get("patch") or "")[:PATCH_REVIEW_LIMIT], **extra)
+            if not blind:
+                tri = lead.get("triage") or {}
+                fields["triage"] = (f"{tri.get('category')} value={tri.get('value')} "
+                                    f"risk={tri.get('risk')} action={tri.get('action')}")
+            return template.format(**fields)
+
+        def collect(reviewer, prompt, blind=False, arbiter_vote=False, round_no=1):
             verdict = extract_json_object(agent_run(reviewer, prompt, timeout=args.timeout))
             return {
                 "reviewer": reviewer,
-                "vote": (verdict or {}).get("vote", "NO_ANSWER"),
+                "vote": (verdict or {}).get("vote", ERROR_VOTE),
                 "aligned": (verdict or {}).get("aligned_with_direction"),
                 "concern": (verdict or {}).get("concern"),
                 "reason": (verdict or {}).get("reason"),
-                "arbiter": arbiter,
+                "arbiter": arbiter_vote,
+                "blind": blind,
+                "round": round_no,
             }
 
-        votes = [collect(reviewer) for reviewer in reviewers]
+        # One ballot is cast blind, so at least one vote is not anchored on the triage
+        # verdict every other reviewer is reading.
+        informed_prompt = render(REVIEW_TEMPLATE)
+        blind_prompt = render(REVIEW_TEMPLATE_BLIND, blind=True)
+        votes = [collect(r, blind_prompt if i == 0 else informed_prompt, blind=(i == 0))
+                 for i, r in enumerate(panel)]
 
-        # A split is exactly the case a third, unrelated model can settle. Asking
-        # it on every candidate would just add cost and noise, so it is fetched
-        # only when the first two actually disagree.
-        if arbiter and votes_are_split(votes):
-            log(f"    split verdict - asking {arbiter} to arbitrate")
-            votes.append(collect(arbiter, arbiter=True))
+        # Round two: only on a split, arguments anonymised, sessions fresh.
+        if votes_are_split(votes):
+            arguments = "\n".join(
+                f"- Reviewer {chr(ord('A') + i)} voted {v['vote']}: "
+                f"{v.get('reason') or v.get('concern') or '(no reason given)'}"
+                for i, v in enumerate(answered_votes(votes)))
+            log(f"    split - second round on anonymised arguments")
+            round2_prompt = render(ROUND2_TEMPLATE, arguments=arguments)
+            second = [collect(r, round2_prompt, round_no=2) for r in panel]
+            if any(a["vote"] != b["vote"] for a, b in zip(votes, second)):
+                flipped += 1
+            votes = votes + second
+            # The second round replaces the first for the decision; the first is kept
+            # on the record so a later reader can see what changed and why.
+            decision_votes = second
+        else:
+            decision_votes = votes
 
-        decision = consensus_decision(votes, bool(cand.get("security_flags")))
+        decision = consensus_decision(decision_votes, security)
 
-        cand["preapproval"] = {
+        # Nobody votes on a patch they were only shown part of.
+        if truncated and decision == "pre-approved":
+            decision = "manual-review"
+
+        # Unanimity is the one outcome the panel never challenges, which is exactly how
+        # "unanimous and wrong" stays invisible. A slice of it goes to the family that
+        # sat this one out, to produce a measured disagreement rate rather than a
+        # reassurance. Deterministic sampling: no RNG, so a re-run audits the same set.
+        auditor = skipped[0] if skipped else arbiter
+        audit = None
+        if (auditor and decision == "pre-approved" and args.audit_every > 0
+                and int(lead["sha"][:8], 16) % args.audit_every == 0):
+            audit = collect(auditor, informed_prompt, arbiter_vote=True)
+            audited += 1
+            votes = votes + [audit]
+            if audit["vote"] != "APPROVE":
+                decision = "manual-review"
+
+        lead["preapproval"] = {
             "decision": decision,
             "tier": tier,
+            "panel": panel,
+            "rotated_out": skipped,
+            "chain": [c["sha"] for _, c, _ in unit] if len(unit) > 1 else None,
+            "patch_truncated": truncated,
+            "audited": bool(audit),
             "votes": votes,
             "dissent": [f"{v['reviewer']}: {v['vote']} - {v.get('reason') or v.get('concern') or ''}"
-                        for v in votes if v["vote"] != "APPROVE"],
+                        for v in decision_votes if v["vote"] != "APPROVE"],
             "at": utc_now(),
         }
-        write_json(path, cand)
+        write_json(lead_path, lead)
+        for path, cand, _ in unit[1:]:
+            cand["preapproval"] = dict(lead["preapproval"], judged_with=lead["sha"])
+            write_json(path, cand)
+
         if decision == "pre-approved":
             approved += 1
+        elif decision == "held":
+            held += 1
         else:
             manual += 1
-        log(f"  {decision:<14} [{'/'.join(v['vote'][:4] for v in votes)}] "
-            f"{cand['sha'][:8]} {(cand.get('subject') or '')[:46]}")
+        log(f"  {decision:<14} [{'/'.join(v['vote'][:4] for v in decision_votes)}] "
+            f"{lead['sha'][:8]} {(lead.get('subject') or '')[:46]}")
 
-    log(f"  pre-approved: {approved}   manual review: {manual}")
+    log(f"  pre-approved: {approved}   manual review: {manual}   held (no quorum): {held}")
+    if audited:
+        log(f"  unanimity audit: {audited} unanimous approval(s) re-checked by the rotated-out family")
+    if flipped:
+        log(f"  second round changed at least one vote on {flipped} unit(s)")
     save_meta(meta, "preapprove", {"pre_approved": approved, "manual": manual,
+                                   "held": held, "audited": audited,
                                    "reviewers": reviewers, "arbiter": arbiter})
     return 0
 
@@ -1411,11 +1641,17 @@ def build_parser():
 
     p_pre = sub.add_parser("preapprove",
                            help="independent counter-opinions vote on import candidates")
-    p_pre.add_argument("--reviewers", default="codex,gemini",
-                       help="comma-separated agents, at least two (default codex,gemini)")
-    p_pre.add_argument("--arbiter", default="grok",
-                       help="third model family asked only when reviewers disagree "
-                            "(default grok; empty string disables)")
+    p_pre.add_argument("--reviewers", default="claude,codex,grok",
+                       help="comma-separated model families on flat subscriptions, at "
+                            "least two after rotation (default claude,codex,grok)")
+    p_pre.add_argument("--arbiter", default="",
+                       help="family used to audit unanimous approvals; by default this "
+                            "is whichever reviewer was rotated out for running triage, "
+                            "so no fourth subscription is needed")
+    p_pre.add_argument("--audit-every", type=int, default=10,
+                       help="audit roughly one in N unanimous approvals with the "
+                            "rotated-out family (default 10; sampling is deterministic "
+                            "on the SHA, so a re-run audits the same set)")
     p_pre.add_argument("--limit", type=int, default=0, help="stop after N candidates")
     p_pre.add_argument("--timeout", type=int, default=600, help="per-reviewer timeout in seconds")
     p_pre.add_argument("--refresh", action="store_true", help="re-run on already voted candidates")

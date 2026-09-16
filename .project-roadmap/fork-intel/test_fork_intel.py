@@ -207,9 +207,18 @@ class PreApprovalConsensusTests(unittest.TestCase):
         votes = [self.vote("codex", "REJECT"), self.vote("gemini", "APPROVE")]
         self.assertEqual("manual-review", fi.consensus_decision(votes, False))
 
-    def test_reviewer_that_did_not_answer_counts_as_dissent(self):
+    def test_reviewer_that_did_not_answer_leaves_no_quorum(self):
+        # Silence is neither consent nor dissent. One answered ballot is not a panel,
+        # so the candidate is held rather than approved or sent on as a judgement.
         votes = [self.vote("codex", "APPROVE"), self.vote("gemini", "NO_ANSWER")]
-        self.assertEqual("manual-review", fi.consensus_decision(votes, False))
+        self.assertEqual("held", fi.consensus_decision(votes, False))
+
+    def test_a_broken_reviewer_can_never_produce_an_approval(self):
+        # The failure that matters: a CLI that is down, rate-limited or timing out must
+        # not be able to turn a single yes into a pass.
+        votes = [self.vote("codex", "APPROVE"), self.vote("grok", "NO_ANSWER"),
+                 self.vote("claude", "NO_ANSWER")]
+        self.assertNotEqual("pre-approved", fi.consensus_decision(votes, False))
 
     def test_misalignment_with_our_direction_blocks_pre_approval(self):
         votes = [self.vote("codex", "APPROVE"), self.vote("gemini", "APPROVE", aligned=False)]
@@ -220,7 +229,7 @@ class PreApprovalConsensusTests(unittest.TestCase):
         self.assertEqual("manual-review", fi.consensus_decision(votes, True))
 
     def test_no_votes_is_not_approval(self):
-        self.assertEqual("manual-review", fi.consensus_decision([], False))
+        self.assertEqual("held", fi.consensus_decision([], False))
 
 
 class ArbitrationTests(unittest.TestCase):
@@ -248,10 +257,14 @@ class ArbitrationTests(unittest.TestCase):
         self.assertFalse(fi.votes_are_split(
             [self.vote("codex", "APPROVE"), self.vote("gemini", "NO_ANSWER")]))
 
-    def test_arbiter_majority_pre_approves_a_split(self):
+    def test_a_majority_does_not_pass_the_gate(self):
+        # Superseded policy: a third family used to break a split by majority. The gate
+        # is unanimity now. A split goes to a second round on anonymised arguments, and
+        # if that round is still not unanimous a human decides - a false APPROVE into a
+        # credential manager costs far more than a false hold.
         votes = [self.vote("codex", "APPROVE"), self.vote("gemini", "REJECT"),
                  self.vote("grok", "APPROVE", arbiter=True)]
-        self.assertEqual("pre-approved", fi.consensus_decision(votes, False))
+        self.assertEqual("manual-review", fi.consensus_decision(votes, False))
 
     def test_arbiter_siding_with_the_objection_keeps_it_manual(self):
         votes = [self.vote("codex", "APPROVE"), self.vote("gemini", "REJECT"),
@@ -315,6 +328,63 @@ class VerdictParsingTests(unittest.TestCase):
 
     def test_object_parser_returns_none_without_an_object(self):
         self.assertIsNone(fi.extract_json_object("REJECT - too risky"))
+
+
+
+class PanelIndependenceTests(unittest.TestCase):
+    """The gate is a consensus of model families, so it is worth exactly what its
+    independence is worth. These pin the three things that protect it."""
+
+    @staticmethod
+    def candidate(sha, subject, fork="someone/mRemoteNG", triage_agent="claude", patch="diff"):
+        return {"sha": sha, "subject": subject, "fork": fork, "patch": patch,
+                "stats": {"files": 1, "additions": 1, "deletions": 0}, "files": [],
+                "triage": {"agent": triage_agent, "action": "IMPORT"}}
+
+    def test_a_revert_is_grouped_with_the_commit_it_reverts(self):
+        # Judged alone a revert reads as noise; judged with its original it is the
+        # clearest signal in the set - somebody tried this and took it back.
+        original = ("p1", self.candidate("aaa1", "Anchor the RDP control to the panel"), "B")
+        revert = ("p2", self.candidate("bbb2", 'Revert "Anchor the RDP control to the panel"'), "B")
+        chains = fi.build_chains([original, revert])
+        self.assertEqual(1, len(chains))
+        self.assertEqual(["aaa1", "bbb2"], [c["sha"] for _, c, _ in chains[0]])
+
+    def test_the_original_comes_first_in_the_chain(self):
+        revert = ("p2", self.candidate("bbb2", 'Revert "Make it faster"'), "B")
+        original = ("p1", self.candidate("aaa1", "Make it faster"), "B")
+        chains = fi.build_chains([revert, original])
+        self.assertEqual(["aaa1", "bbb2"], [c["sha"] for _, c, _ in chains[0]])
+
+    def test_a_revert_in_another_fork_is_not_the_same_chain(self):
+        # Same subject, different fork: unrelated work that happens to be named alike.
+        a = ("p1", self.candidate("aaa1", "Fix the thing", fork="alice/mRemoteNG"), "B")
+        b = ("p2", self.candidate("bbb2", 'Revert "Fix the thing"', fork="bob/mRemoteNG"), "B")
+        self.assertEqual(2, len(fi.build_chains([a, b])))
+
+    def test_unrelated_commits_are_judged_separately(self):
+        a = ("p1", self.candidate("aaa1", "One thing"), "B")
+        b = ("p2", self.candidate("bbb2", "Another thing"), "B")
+        chains = fi.build_chains([a, b])
+        self.assertEqual([1, 1], [len(c) for c in chains])
+
+    def test_a_truncated_diff_is_detected(self):
+        # Nobody votes on a patch they were only shown part of.
+        big = self.candidate("aaa1", "Huge", patch="x" * (fi.PATCH_REVIEW_LIMIT + 1))
+        small = self.candidate("bbb2", "Small", patch="x" * 10)
+        self.assertTrue(fi.patch_was_truncated(big, fi.PATCH_REVIEW_LIMIT))
+        self.assertFalse(fi.patch_was_truncated(small, fi.PATCH_REVIEW_LIMIT))
+
+    def test_revert_subject_is_only_read_from_a_real_revert(self):
+        self.assertEqual("Do the thing", fi.revert_subject('Revert "Do the thing"'))
+        self.assertIsNone(fi.revert_subject("Reverting some of the thing"))
+        self.assertIsNone(fi.revert_subject("Do the thing"))
+        self.assertIsNone(fi.revert_subject(None))
+
+    def test_only_answered_ballots_are_counted(self):
+        votes = [{"vote": "APPROVE"}, {"vote": "NO_ANSWER"}, {"vote": None}, {"vote": "REJECT"}]
+        self.assertEqual(["APPROVE", "REJECT"],
+                         [v["vote"] for v in fi.answered_votes(votes)])
 
 
 if __name__ == "__main__":
