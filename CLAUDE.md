@@ -1,10 +1,34 @@
-# mRemoteNG - Build & Development Notes
+﻿# mRemoteNG - Build & Development Notes
 
 > **Project canon for all agents.** [AGENTS.md](AGENTS.md) is only the discovery bootstrap for tools that do not load `CLAUDE.md` directly.
 
-## Integrare operațională GESEIDL
+## Scope boundary — this repository stands alone
 
-Respectă integral canonul părinte [../CLAUDE.md](../CLAUDE.md). Pentru orice sistem, date, email, document, share, identitate sau infrastructură GESEIDL, folosește mai întâi MCP-urile Geseidl namespacate și verifică health/canarul înainte să declari o capabilitate indisponibilă. La indisponibilitate tehnică confirmată ori capabilitate autorizată absentă, anunță în commentary operația, eroarea/canarul și fallbackul activat, apoi continuă automat numai în scopul deja cerut. Nu există fallback pentru refuz de politică/`FORBIDDEN`, DLP/validare, autentificare/autorizare, destinatar invalid ori rezultat ambiguu și nu se face retry automat după send incert. Email: MCP → broker IMAP draft-only prin `D:\github\NET-ADMIN\tools\secure_connect.py --mail-draft-request <JSON>`; Thunderbird este exclus din fluxul automat și rămâne doar ultimă opțiune manuală pentru draft, la cererea explicită a userului. Brokerul nu exportă parole, nu citește Thunderbird, nu are SMTP/send și este idempotent. Emailurile pentru oameni sunt HTML modern profesional, randat canonic din Markdown ca multipart HTML + text accesibil, cu CSS inline/CID și fără resurse externe; text-only/HTML brut, Outlook, COM, MAPI și Graph sunt interzise.
+mRemoteNG is a public, open-source fork. It carries no dependency on, and no reference to, any
+private infrastructure, internal tooling, client data, or corporate process of whoever happens to
+maintain it. Nothing here should require a reader to have access to anything that is not in this
+repository.
+
+That cuts both ways, and both directions are rules:
+
+- **Nothing private comes in.** No internal host names, private IP ranges, share paths, credential
+  stores, internal service endpoints, client names, or references to tooling that lives outside
+  this repository. A maintainer's own infrastructure is their business and belongs in their own
+  private repositories — never in this tree, its history, its issues, or its documentation.
+- **Work for anything other than mRemoteNG is not done from this checkout.** If a task is not about
+  this application, it belongs in whatever repository owns it. Artefacts, notes and state from
+  unrelated work must never be left in this working tree.
+
+The one deliberate exception is maintainer attribution, which is public by design: the README and
+the About dialog name who maintains the fork and link to their site. That is a credit line, not an
+integration.
+
+The lab documented in [docs/LAB-GUEST.md](docs/LAB-GUEST.md) is the edge case worth naming
+explicitly. It describes throwaway virtual machines on a maintainer's own Hyper-V host, on an
+isolated internal switch, used to drive the UI acceptance battery. Their names and RFC 1918
+addresses are in the tree because a scenario has to name a target to be reproducible, and every
+credential they use comes from the environment at run time. Anyone can recreate the same lab from
+that document; nobody needs the maintainer's machine to build, test or ship this application.
 
 ## Output Efficiency (CRITICAL — output tokens are 97% of API cost)
 
