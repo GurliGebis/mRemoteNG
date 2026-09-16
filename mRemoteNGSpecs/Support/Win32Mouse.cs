@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -27,6 +27,10 @@ namespace mRemoteNGSpecs.Support
             Rectangle bounds = element.BoundingRectangle;
             return new Point(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
         }
+
+        /// <summary>A real left click, for a window that belongs to another process.</summary>
+        public static void LeftClick(AutomationElement element) =>
+            Mouse.Click(CentreOf(element), MouseButton.Left);
 
         public static void RightClick(AutomationElement element) =>
             Mouse.Click(CentreOf(element), MouseButton.Right);
