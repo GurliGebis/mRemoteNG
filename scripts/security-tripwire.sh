@@ -37,7 +37,13 @@ DOC_EXCLUDES=(':(exclude)*.md' ':(exclude)*.txt' ':(exclude)scripts/security-tri
 
 RANGE="${1:-}"
 if [ -n "$RANGE" ]; then
-    FILES=$(git diff --name-only "$RANGE")
+    # A range git cannot resolve used to leave FILES empty, which reads as "nothing
+    # changed" two lines down and lets the commit through. A guard that fails open on a
+    # typo is not a guard, so an unusable range is an error, not a pass.
+    if ! FILES=$(git diff --name-only "$RANGE" 2>&1); then
+        echo "security-tripwire: cannot diff range '$RANGE': $FILES" >&2
+        exit 2
+    fi
     ADDED=$(git diff --unified=0 "$RANGE" -- . "${DOC_EXCLUDES[@]}" | grep '^+' | grep -v '^+++' || true)
 else
     FILES=$(git diff --cached --name-only)

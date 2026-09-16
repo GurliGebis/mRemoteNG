@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# A merge commit is a delivery too.
+#
+# git runs pre-commit for ordinary commits and pre-merge-commit for merges. Without this
+# file the tripwire did not exist on the merge path at all, so landing a pull request that
+# touched cryptography, credentials or a transport reached main with no review gate. Found
+# the honest way: PR #158 touched PuttyBase.cs, merged silently, and a manual run of the
+# tripwire afterwards showed it would have been blocked.
+#
+# The scan is the staged one, with no range argument. By the time this hook runs the merge
+# result is already in the index but MERGE_HEAD is not yet resolvable, so a range of
+# HEAD...MERGE_HEAD reads as empty - and an empty file list is exactly what the tripwire
+# treats as "nothing to review". That combination fails open, which is the one thing a
+# tripwire must never do.
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+exec "$repo_root/scripts/security-tripwire.sh"
