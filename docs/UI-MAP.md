@@ -327,7 +327,7 @@ Authentication Type/Username/Password, Private Key File(+Browse), Passphrase.
 ### 4.4 About (`frmAbout`)
 Shown docked in `pnlDock` (not modal). Title "Fructus temporum" (tagline), Version/License/
 Copyright labels, links **Credits**/**Changelog**/**License**. "This Fork": **GitHub Page** /
-**Releases** / **Changelog**. "Maintained by": "Geseidl IT Solutions" + **geseidl.ro/servicii-it**.
+**Releases** / **Changelog**. "Maintained by": "Geseidl IT Solutions" + **geseidl.ro/en/servicii-it**.
 
 ## 5. FlaUI Gotchas
 

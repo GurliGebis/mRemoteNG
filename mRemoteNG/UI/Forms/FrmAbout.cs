@@ -61,7 +61,7 @@ namespace mRemoteNG.UI.Forms
             lblOriginalHeader.Text = "The Original Project — thank you";
             lblMaintainedBy.Text = Language.MaintainedBy;
             lblMaintainer.Text = "Geseidl IT Solutions";
-            llMaintainerWebsite.Text = "geseidl.ro/servicii-it";
+            llMaintainerWebsite.Text = "geseidl.ro/en/servicii-it";
         }
 
         private static string PortableSuffix()
@@ -129,7 +129,7 @@ namespace mRemoteNG.UI.Forms
 
         private void llMaintainerWebsite_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            OpenUrl("https://geseidl.ro/servicii-it");
+            OpenUrl("https://geseidl.ro/en/servicii-it");
         }
 
         private void llDonate_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)

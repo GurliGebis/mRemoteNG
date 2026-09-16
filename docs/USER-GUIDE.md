@@ -598,7 +598,7 @@ Administrators can disable all of this by policy, in which case the Updates page
 
 ## Maintained by
 
-<a href="https://geseidl.ro/servicii-it"><img src="https://geseidl.ro/assets/icons/logo-green.png" alt="Geseidl Consulting Group" height="40"></a>
+<a href="https://geseidl.ro/en/servicii-it"><img src="https://geseidl.ro/assets/icons/logo-green.png" alt="Geseidl Consulting Group" height="40"></a>
 
-This fork is maintained by [Geseidl IT Solutions](https://geseidl.ro/servicii-it), part of
-[Geseidl Consulting Group](https://geseidl.ro).
+This fork is maintained by [Geseidl IT Solutions](https://geseidl.ro/en/servicii-it), part of
+[Geseidl Consulting Group](https://geseidl.ro/en).

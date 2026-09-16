@@ -219,7 +219,7 @@ namespace mRemoteNG.UI.Forms
             llMaintainerWebsite.Name = "llMaintainerWebsite";
             llMaintainerWebsite.TabIndex = 17;
             llMaintainerWebsite.TabStop = true;
-            llMaintainerWebsite.Text = "geseidl.ro/servicii-it";
+            llMaintainerWebsite.Text = "geseidl.ro/en/servicii-it";
             llMaintainerWebsite.LinkClicked += llMaintainerWebsite_LinkClicked;
             //
             // lblOriginalHeader

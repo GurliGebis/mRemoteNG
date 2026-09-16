@@ -596,13 +596,13 @@ This fork is based on [mRemoteNG/mRemoteNG](https://github.com/mRemoteNG/mRemote
 
 ## Maintained by
 
-<a href="https://geseidl.ro/servicii-it"><img src="https://geseidl.ro/assets/icons/logo-green.png" alt="Geseidl Consulting Group" height="45"></a>
+<a href="https://geseidl.ro/en/servicii-it"><img src="https://geseidl.ro/assets/icons/logo-green.png" alt="Geseidl Consulting Group" height="45"></a>
 
-This Community Edition is maintained by **[Geseidl IT Solutions](https://geseidl.ro/servicii-it)**, part of [Geseidl Consulting Group](https://geseidl.ro) — an IT infrastructure, cloud, and cybersecurity services provider in Ploiești, Romania.
+This Community Edition is maintained by **[Geseidl IT Solutions](https://geseidl.ro/en/servicii-it)**, part of [Geseidl Consulting Group](https://geseidl.ro/en) — an IT infrastructure, cloud, and cybersecurity services provider in Ploiești, Romania.
 
 We use mRemoteNG daily across our managed infrastructure (50+ servers, 300+ client connections) and built this modernized edition because we needed it to be better. The research paper documenting the AI-assisted development process is available at [`scientific-paper/PAPER.md`](scientific-paper/PAPER.md).
 
-[geseidl.ro/servicii-it](https://geseidl.ro/servicii-it) | [About us](https://geseidl.ro/despre-noi)
+[geseidl.ro/en/servicii-it](https://geseidl.ro/en/servicii-it) | [About us](https://geseidl.ro/en/despre-noi)
 
 ## Support the Project
 
