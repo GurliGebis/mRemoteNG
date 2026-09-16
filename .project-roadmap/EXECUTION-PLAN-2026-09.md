@@ -1,4 +1,4 @@
-# Execution plan — September 2026
+﻿# Execution plan — September 2026
 
 Derived from [UPSTREAM-ALIGNMENT-2026-09-16.md](UPSTREAM-ALIGNMENT-2026-09-16.md). Everything here
 is about mRemoteNG and nothing else; see the scope boundary in [../CLAUDE.md](../CLAUDE.md).
@@ -96,36 +96,92 @@ Constitutional rules move out of `CLAUDE.md`, which keeps the manual and points 
 
 ## W7 — The review panel
 
-`fork-intel`'s `preapprove` gate, rebuilt around the CLIs actually available on subscription. It
-stays self-contained in this repository: no dependency on any external plugin, no MCP, just CLIs
-found on `PATH`.
+`fork-intel`'s `preapprove` gate, rebuilt. It stays self-contained in this repository: no dependency
+on any external plugin, no MCP, just CLIs found on `PATH`.
 
-Design:
+The design below is the corrected one. Four adversarial reviews of the first draft overturned three
+of its choices; where that happened it is said so, because the reasoning matters more than the
+conclusion.
 
-- **Round 1 — sealed ballots.** Independent reviewers, no cross-talk, verdict plus reasoning stored
-  per candidate. Reviewers get the raw evidence, never a pre-formed conclusion: the framing channel
-  is the contamination risk that crosses model families, not the family mix.
-- **Round 2 — only on divergence.** Each reviewer gets the other arguments **anonymised** ("another
-  reviewer argues X", never "Grok says X") in a **fresh** session. Anonymised so brand deference
-  does not drive herding; fresh so no reviewer is defending words it already committed to.
-  Continuing the original sessions would be cheaper but buys a reviewer anchored on its own verdict.
-- **Final call is a vote, not convergence.** Agreement reached by deliberation is not evidence of
-  correctness.
-- **Sample-audit unanimity.** A small random slice of unanimous verdicts goes to an extra family
-  anyway. Without it, "unanimous and wrong" — the failure mode this project has already lived
-  through — is invisible by construction. This turns an assumption into a measured rate.
-- **Security-flagged candidates skip the gate** and go straight to a human.
+### Panel composition
+
+Surveyed 2026-09-16. Criteria: the vendor trains its own frontier models, ships an official agentic
+CLI, offers a flat subscription, and is usable from the EU.
+
+| Family | CLI | Plan | Notes |
+|---|---|---|---|
+| Anthropic | `claude` | Pro $20/mo | stable; not unlimited-flat — top-up credits at API rates past quota |
+| OpenAI | `codex` | in ChatGPT tiers, Plus $20/mo | stable |
+| xAI | `grok` | SuperGrok $30/mo | **still officially beta**, per xAI release notes dated 2026-09-16 |
+| Mistral | `vibe` | Le Chat Pro $14.99/mo | stable, fully agentic, **French company, EU-hosted, GDPR, Romania listed explicitly** |
+
+Google is a candidate but not adopted yet: Antigravity CLI (`agy`) replaced the standalone Gemini
+CLI and *is* covered by Google AI Pro, which corrects the earlier assumption that Google was
+API-metered only. Confidence on that finding is medium and it carries a trap — Antigravity also
+serves Claude and GPT-OSS models from the same Google quota, so an unpinned "Google vote" can
+silently be Claude answering. If adopted, the model must be pinned explicitly.
+
+Ruled out: DeepSeek (China, and no subscription at all — pay-per-token only), Qwen Code (free tier
+discontinued 2026-04-15, EU purchase path unresolved), GLM Coding Plan (cheap, but no official
+terminal CLI — it is a model you point an existing CLI at, so it is a model swap, not a fourth
+vote), MiniMax (thin tool-calling CLI, not an autonomous agent), Baidu Zulu (impractical from
+Romania), and every multi-vendor wrapper — Cursor CLI, trae-agent, Trae IDE.
+
+### Prerequisite — measure before building
+
+Two things must be established first, and neither can be assumed:
+
+1. **Terms of service.** Whether scripted batch invocation of each subscription CLI, at this
+   volume, is within that provider's acceptable-use terms. This is read, not guessed.
+2. **Rate limits and quota sharing.** Pilot 50–100 candidates against each CLI in isolation and
+   record: sustained calls/hour before throttling, the exact behaviour on cap-hit, and — the one
+   that bites hardest — **whether the pipeline's quota is the same pool as the maintainer's own
+   interactive use.** Five hundred judgements that burn the quota needed for actual work is a
+   failure even if every verdict is correct.
+
+### How the gate works
+
+- **Round 1 — sealed ballots.** Three reviewers, independent, no cross-talk; verdict plus reasoning
+  stored per candidate.
+- **Reviewer rotation.** The family that ran triage never votes on that candidate. This is not
+  hypothetical: `fork_intel.py` defaults triage to `--agent claude`, so today Claude triages and
+  then votes on its own triage.
+- **Partial blinding.** Reviewers currently receive a byte-identical prompt carrying the prior
+  triage verdict — a shared anchor across every vote. At least one reviewer must get the raw diff
+  with no triage summary, so one ballot is genuinely blind.
+- **Truncation is a flag, not a detail.** The prompt truncates the patch. A candidate whose diff
+  exceeds the limit goes to manual review regardless of the vote; nobody votes on a patch they were
+  only shown part of.
+- **Git-ancestry batching, in one stateless prompt.** *Corrected from the first draft, which
+  proposed a persistent session per cluster.* A commit and its later revert must be judged together
+  to be understood — but that needs one prompt containing both diffs labelled in order, asking for a
+  single verdict on the sequence. A multi-turn session buys the same understanding and adds
+  anchoring, drift, and a model agreeing with its own earlier conclusions. The cluster boundary is
+  git ancestry, nothing looser.
+- **Round 2 — only on a split, and a split means any non-unanimous vote** (2-1 counts, not just an
+  exact tie). Each reviewer gets the other arguments **anonymised** — "another reviewer argues X",
+  never "Grok says X" — in a **fresh** session. Anonymised so brand deference does not drive
+  herding; fresh so no reviewer is defending words it already committed to.
+- **Quorum: unanimous to pass.** Unanimous APPROVE passes the gate. Unanimous REJECT is recorded via
+  `mark` so it stops resurfacing. A split goes to round 2; if round 2 reaches unanimity, take it;
+  if it is still split, a human decides. For an import gate into a credential manager, a false
+  APPROVE costs far more than a false HOLD.
+- **ABSTAIN and ERROR are distinct from REJECT.** A missing vote — CLI down, rate-limited, timed
+  out — never folds into an APPROVE. Fewer than two successful votes means the candidate is held,
+  never approved.
+- **Security-flagged candidates skip the panel entirely** and go to a human. No number of model
+  APPROVEs substitutes for review of a security-relevant change.
+- **Sample-audit unanimity.** A stratified slice of unanimous APPROVEs goes to a fourth family
+  anyway, prioritised by the risk proxies the tool already computes. Without it, "unanimous and
+  wrong" — a failure this project has already lived through — is invisible by construction. The
+  point is to produce a measured disagreement rate, not a reassurance.
 - **Honest labels.** With fewer than two independent families voting it is a second opinion, not a
-  consensus gate, and the report must say so.
+  consensus gate, and the report says so.
 
-Open decisions: quorum (2-of-3 or unanimous), what a missing vote means when a CLI is rate-limited
-(fail closed is the safe default), and the final panel composition pending the CLI survey.
-
-**Done when:** the gate runs from this repository against subscription CLIs, round 2 fires only on
-divergence, the unanimity audit reports a measured disagreement rate, and the report's wording
-matches what the gate actually is.
-
----
+**Done when:** the prerequisite measurements exist and are written down; the gate runs from this
+repository against subscription CLIs; rotation, blinding and truncation-flagging are in place;
+round 2 fires only on a split and only with anonymised arguments in fresh sessions; the unanimity
+audit reports a measured rate; and the report's wording matches what the gate actually is.
 
 ## Notes that constrain all of the above
 
