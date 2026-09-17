@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using mRemoteNG.Connection;
 using mRemoteNG.Container;
 using mRemoteNG.Tree.Root;
@@ -49,11 +49,19 @@ namespace mRemoteNG.Config.Import
         }
 
         /// <summary>
-        /// The connection root of a tree, which is the one root node that is not the PuTTY
-        /// sessions node. Returns null for a tree that has none, rather than throwing the way a
-        /// bare First() does.
+        /// The connection root of a tree.
+        ///
+        /// RootPuttySessionsNodeInfo derives from RootNodeInfo, so an OfType&lt;RootNodeInfo&gt;()
+        /// filter matches the PuTTY sessions root as well - and whichever of the two the tree
+        /// happens to list first is what a bare First() returns. The window's original code had
+        /// exactly that shape, which means the fallback meant to steer imports AWAY from PuTTY
+        /// could land them there. Excluded explicitly.
+        ///
+        /// Returns null for a tree with no connection root, rather than throwing the way First()
+        /// does.
         /// </summary>
         public static RootNodeInfo? ConnectionRootOf(System.Collections.Generic.IEnumerable<ConnectionInfo>? rootNodes) =>
-            rootNodes?.OfType<RootNodeInfo>().FirstOrDefault();
+            rootNodes?.OfType<RootNodeInfo>()
+                      .FirstOrDefault(root => root is not RootPuttySessionsNodeInfo);
     }
 }
