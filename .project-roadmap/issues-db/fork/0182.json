@@ -8,7 +8,7 @@
   ],
   "author": "Buster-de",
   "created_at": "2026-09-09T21:37:57Z",
-  "github_updated_at": "2026-09-12T19:39:40Z",
+  "github_updated_at": "2026-09-13T19:45:54Z",
   "body_snippet": "During testing with `mRemoteNG-nightly-20260909-v1.83.0-00cd029-x64.msi` to validate issue #179, I noticed that opening an RDP connection increases the process's memory usage (active private working set) by roughly 300 MB in my environment.\n\nAfter opening and closing several RDP connections, including closing their tabs and panels, the allocated memory does not appear to be released.\n\nHow to reproduce\n* Open and close several RDP sessions.\n  * I had 8 different concurrent sessions in 3 different...",
   "our_status": "testing",
   "priority": null,
@@ -83,12 +83,21 @@
       "is_ours": true,
       "analyzed": false,
       "action_needed": false
+    },
+    {
+      "id": "IC_kwDORKxwDc8AAAABURqLcw",
+      "author": "Buster-de",
+      "date": "2026-09-13T19:45:54Z",
+      "snippet": "tested using mRemoteNG-nightly-20260912-v1.83.0-ec5794e-x64.msi\n\nmeasure-rdp-memory.ps1 output:\n> Watching mRemoteNG (PID 7516). Baseline private bytes: 73 MB.\n> Open an RDP session, let the desktop paint, close its tab, wait a few seconds,\n> then press Enter here. Repeat three or four times. Type q and press Enter when done.\n> \n> \n>   session 1: peak while open 525 MB, after close 74 MB (+1 MB above baseline)\n> \n>   session 2: peak while open 514 MB, after close 73 MB (0 MB above baseline)\n> \n>...",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
     }
   ],
-  "comments_cursor": "2026-09-12T19:39:40Z",
-  "unread_comments": 1,
+  "comments_cursor": "2026-09-13T19:45:54Z",
+  "unread_comments": 2,
   "needs_action": true,
-  "waiting_for_us": false,
-  "last_synced": "2026-09-12T19:39:55Z",
+  "waiting_for_us": true,
+  "last_synced": "2026-09-16T18:56:37Z",
   "notes": "Round 2 shipped 791ede63a, reply posted; awaiting reporter log lines + per-close numbers. Attempt budget exhausted."
 }

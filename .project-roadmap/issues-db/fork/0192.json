@@ -1,0 +1,28 @@
+{
+  "number": 192,
+  "repo": "robertpopa22/mRemoteNG",
+  "title": "[Crash] System.IO.FileNotFoundException: Could not load file or assembly 'ExternalConnectors, Version=1.0.0.0, Culture=ne...",
+  "state": "open",
+  "labels": [
+    "bug",
+    "crash-report",
+    "auto-submitted"
+  ],
+  "author": "robertpopa22",
+  "created_at": "2026-09-16T09:31:00Z",
+  "github_updated_at": "2026-09-16T09:31:00Z",
+  "body_snippet": "## Crash Report\r\n\r\n### Exception\r\n**Type:** `System.IO.FileNotFoundException`\r\n**Message:** Could not load file or assembly 'ExternalConnectors, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null'. The system cannot find the file specified.\r\n\r\n### Stack Trace\r\n```\r\n   at async void mRemoteNG.Connection.ConnectionInitiator.OpenConnection(ConnectionInfo connectionInfo, Force force, ConnectionWindow conForm) x 2\r\n   at void System.Runtime.CompilerServices.AsyncMethodBuilderCore.Start<TStateMachi...",
+  "our_status": "new",
+  "priority": null,
+  "target_release": null,
+  "our_branch": null,
+  "our_pr": null,
+  "iterations": [],
+  "comments": [],
+  "comments_cursor": "2026-09-16T09:31:00Z",
+  "unread_comments": 0,
+  "needs_action": true,
+  "waiting_for_us": true,
+  "last_synced": "2026-09-16T18:56:37Z",
+  "notes": ""
+}
