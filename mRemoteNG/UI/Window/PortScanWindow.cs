@@ -380,20 +380,12 @@ namespace mRemoteNG.UI.Window
         /// </summary>
         private static ContainerInfo? GetDestinationContainerForImportedHosts()
         {
-            ConnectionInfo? selectedNode = AppWindows.TreeForm?.SelectedNode ?? AppWindows.TreeForm?.ConnectionTree.ConnectionTreeModel.RootNodes.OfType<RootNodeInfo>().First();
-
-            if (selectedNode is null)
-                return null;
-
-            // if a putty node is selected, place imported connections in the root connection node
-            if (selectedNode is RootPuttySessionsNodeInfo || selectedNode is PuttySessionInfo)
-                selectedNode = AppWindows.TreeForm!.ConnectionTree.ConnectionTreeModel.RootNodes.OfType<RootNodeInfo>()
-                                      .First();
-
-            // if the selected node is a connection, use its parent container
-            ContainerInfo? selectedTreeNodeAsContainer = selectedNode as ContainerInfo ?? selectedNode.Parent;
-
-            return selectedTreeNodeAsContainer;
+            // Reading the tree is this window's job; deciding what the selection means is not, and
+            // the rules are worth testing - see PortScanDestinationResolver.
+            return Config.Import.PortScanDestinationResolver.Resolve(
+                AppWindows.TreeForm?.SelectedNode,
+                Config.Import.PortScanDestinationResolver.ConnectionRootOf(
+                    AppWindows.TreeForm?.ConnectionTree.ConnectionTreeModel.RootNodes));
         }
 
         private void importVNCToolStripMenuItem_Click(object sender, EventArgs e)

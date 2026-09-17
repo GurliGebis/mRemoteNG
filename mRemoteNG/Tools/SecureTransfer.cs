@@ -25,6 +25,16 @@ namespace mRemoteNG.Tools
         public AsyncCallback? asyncCallback;
 
 
+        /// <summary>
+        /// Where the transfer reports failures. Defaults to the application's message collector, so
+        /// the running product is unaffected; a test assigns its own and can then exercise the
+        /// transfer without the notification stack behind it.
+        ///
+        /// A property rather than another constructor parameter: this class already configures
+        /// everything else it needs the same way, and it has three constructors already.
+        /// </summary>
+        public Messages.IOperationMessageSink Messages { get; set; } = new Messages.DefaultMessageSink();
+
         public SecureTransfer()
         {
         }
@@ -93,7 +103,7 @@ namespace mRemoteNG.Tools
             {
                 if (ScpClt is null || !ScpClt.IsConnected)
                 {
-                    Runtime.MessageCollector.AddMessage(Messages.MessageClass.ErrorMsg,
+                    Messages.Error(
                         Language.SshTransferFailed + Environment.NewLine +
                         "SCP Not Connected!");
                     return;
@@ -106,7 +116,7 @@ namespace mRemoteNG.Tools
             {
                 if (SftpClt is null || !SftpClt.IsConnected)
                 {
-                    Runtime.MessageCollector.AddMessage(Messages.MessageClass.ErrorMsg,
+                    Messages.Error(
                         Language.SshTransferFailed + Environment.NewLine +
                         "SFTP Not Connected!");
                     return;
