@@ -9,7 +9,6 @@ using System.Numerics;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
-using mRemoteNG.App;
 using mRemoteNG.Messages;
 using mRemoteNG.Resources.Language;
 
@@ -25,6 +24,13 @@ namespace mRemoteNG.Tools
         private readonly int _timeoutInMilliseconds;
         private readonly int _maxConcurrentHosts;
         private CancellationTokenSource? _cancellation;
+
+        /// <summary>
+        /// Where this scan reports progress. Defaults to the application's message collector, so
+        /// nothing changes for the running product; a test supplies its own and can then construct
+        /// a scanner without constructing the notification stack behind it.
+        /// </summary>
+        private readonly IOperationMessageSink _messages;
 
         /// <summary>How many hosts are probed at once unless the caller specifies otherwise.</summary>
         public const int DefaultConcurrentHosts = 64;
@@ -44,9 +50,12 @@ namespace mRemoteNG.Tools
                            IPAddress ipAddress2,
                            IEnumerable<int> ports,
                            int timeoutInMilliseconds = 5000,
-                           int maxConcurrentHosts = DefaultConcurrentHosts)
+                           int maxConcurrentHosts = DefaultConcurrentHosts,
+                           IOperationMessageSink? messageSink = null)
         {
             ArgumentNullException.ThrowIfNull(ports);
+
+            _messages = messageSink ?? new DefaultMessageSink();
 
             IPAddress ipAddressStart = IpAddressMin(ipAddress1, ipAddress2);
             IPAddress ipAddressEnd = IpAddressMax(ipAddress1, ipAddress2);
@@ -75,8 +84,11 @@ namespace mRemoteNG.Tools
                            int port2,
                            int timeoutInMilliseconds = 5000,
                            bool checkDefaultPortsOnly = false,
-                           int maxConcurrentHosts = DefaultConcurrentHosts)
+                           int maxConcurrentHosts = DefaultConcurrentHosts,
+                           IOperationMessageSink? messageSink = null)
         {
+            _messages = messageSink ?? new DefaultMessageSink();
+
             IPAddress ipAddressStart = IpAddressMin(ipAddress1, ipAddress2);
             IPAddress ipAddressEnd = IpAddressMax(ipAddress1, ipAddress2);
 
@@ -161,7 +173,7 @@ namespace mRemoteNG.Tools
 
             try
             {
-                Runtime.MessageCollector.AddMessage(MessageClass.InformationMsg,
+                _messages.Information(
                     $"Tools.PortScan: Starting scan of {total} hosts...", true);
 
                 ParallelOptions options = new()
@@ -185,11 +197,11 @@ namespace mRemoteNG.Tools
             }
             catch (OperationCanceledException)
             {
-                Runtime.MessageCollector.AddMessage(MessageClass.InformationMsg, "Tools.PortScan: Scan cancelled.", true);
+                _messages.Information("Tools.PortScan: Scan cancelled.", true);
             }
             catch (Exception ex)
             {
-                Runtime.MessageCollector.AddMessage(MessageClass.WarningMsg,
+                _messages.Warning(
                     $"Tools.PortScan: Scan failed {Environment.NewLine} {ex.Message}", true);
             }
             finally
@@ -220,7 +232,7 @@ namespace mRemoteNG.Tools
             }
             catch (Exception ex)
             {
-                Runtime.MessageCollector.AddMessage(MessageClass.InformationMsg,
+                _messages.Information(
                     $"Tools.PortScan: Ping failed for {scanHost.HostIp} {Environment.NewLine} {ex.Message}", true);
             }
 
@@ -244,7 +256,7 @@ namespace mRemoteNG.Tools
             }
             catch (Exception dnsex)
             {
-                Runtime.MessageCollector.AddMessage(MessageClass.InformationMsg,
+                _messages.Information(
                     $"Tools.PortScan: Could not resolve {scanHost.HostIp} {Environment.NewLine} {dnsex.Message}", true);
             }
 

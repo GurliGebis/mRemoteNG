@@ -19,7 +19,7 @@ namespace mRemoteNG.UI.Controls
         /// </summary>
         public string ToolTipText
         {
-            get => _toolTip.GetToolTip(this);
+            get => _toolTip.GetToolTip(this) ?? string.Empty;
             set => _toolTip.SetToolTip(this, value);
         }
 
