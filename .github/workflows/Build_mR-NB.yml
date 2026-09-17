@@ -279,6 +279,16 @@ jobs:
           }
           Write-Host "Sanity check passed: no Settings/confCons/backup entries in ZIP"
 
+          # Every assembly the build declares it needs must be in the package. mRemoteNG keeps most
+          # of its dependencies in an Assemblies\ subfolder and finds them with a custom
+          # AssemblyResolve handler, so a dependency the copy step never learned about resolves
+          # perfectly in development and throws FileNotFoundException on a user's machine (#150).
+          # The app-level test sees only the build output; this sees the artifact that ships.
+          pwsh -NoProfile -ExecutionPolicy Bypass `
+            -File "$Env:GITHUB_WORKSPACE\scripts\verify-shipped-assemblies.ps1" `
+            -Path $zipPath
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       - name: (09a) Build MSI installer
         if: matrix.platform == 'x64' && matrix.selfcontained == false
         shell: pwsh
