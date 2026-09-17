@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using mRemoteNG.App;
 
 namespace mRemoteNG.Messages
@@ -27,7 +27,7 @@ namespace mRemoteNG.Messages
         {
             ArgumentNullException.ThrowIfNull(exception);
             Runtime.MessageCollector?.AddExceptionMessage(message, exception,
-                                                          MessageClass.ErrorMsg, !onlyLog);
+                                                          MessageClass.ErrorMsg, onlyLog);
         }
 
         private static void Send(MessageClass messageClass, string message, bool onlyLog) =>
