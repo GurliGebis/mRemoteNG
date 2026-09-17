@@ -7,10 +7,11 @@ namespace mRemoteNG.Messages
     /// The production sink: everything goes to the application's message collector, exactly as it
     /// did when these operations called the singleton directly.
     ///
-    /// The collector is resolved per call rather than captured in the constructor, because
-    /// <see cref="Runtime.MessageCollector"/> is assigned during startup and an operation can
-    /// outlive or precede that assignment. A message with nowhere to go is dropped rather than
-    /// throwing: a scan must not fail because the notification panel is not up yet.
+    /// The collector is read per call rather than captured in the constructor, so a sink created
+    /// early keeps working against whatever <see cref="Runtime.MessageCollector"/> resolves to
+    /// later. The null-conditional is belt and braces - the property is initialised inline and
+    /// cannot currently be null - and it means a message with nowhere to go is dropped rather than
+    /// taking a scan down with it if that ever changes.
     /// </summary>
     public sealed class DefaultMessageSink : IOperationMessageSink
     {

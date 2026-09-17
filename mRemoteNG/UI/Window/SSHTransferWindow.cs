@@ -488,30 +488,18 @@ namespace mRemoteNG.UI.Window
 
         private bool AllFieldsSet()
         {
-            if (txtHost.Text != "" && txtPort.Text != "" && txtUser.Text != "" && txtLocalFile.Text != "" &&
-                txtRemoteFile.Text != "")
-            {
-                if (txtPassword.Text == "")
-                {
-                    if (MessageBox.Show(FrmMain.Default, Language.EmptyPasswordContinue, @"Question?",
-                                        MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
-                    {
-                        return false;
-                    }
-                }
-
-                if (txtRemoteFile.Text.EndsWith('/') || txtRemoteFile.Text.EndsWith('\\'))
-                {
-                    txtRemoteFile.Text +=
-                        txtLocalFile.Text.Substring(txtLocalFile.Text.LastIndexOf('\\') + 1);
-                }
-
-                return true;
-            }
-            else
-            {
+            if (!SshTransferFields.RequiredFieldsPresent(txtHost.Text, txtPort.Text, txtUser.Text,
+                                                         txtLocalFile.Text, txtRemoteFile.Text))
                 return false;
-            }
+
+            // The only part that needs a user in front of it.
+            if (txtPassword.Text == "" &&
+                MessageBox.Show(FrmMain.Default, Language.EmptyPasswordContinue, @"Question?",
+                                MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
+                return false;
+
+            txtRemoteFile.Text = SshTransferFields.ResolveRemotePath(txtRemoteFile.Text, txtLocalFile.Text);
+            return true;
         }
 
 
