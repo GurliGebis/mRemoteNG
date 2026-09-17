@@ -61,6 +61,25 @@ separate these two tool windows from the host behind an interface we control.
 **Done when:** `PortScanWindow` and `SSHTransferWindow` talk to the host through an interface, with
 tests, and the app behaves exactly as before.
 
+**Done, 2026-09-18.** `IOperationMessageSink` + `DefaultMessageSink` is the seam;
+`PortScanner` takes one per constructor and `SecureTransfer` exposes one as a property, both
+defaulting to the collector so no call site changed. The decisions that were trapped inside the
+two windows came out with them: `PortScanDestinationResolver` (where scanned hosts are imported)
+and `SshTransferFields` (whether a transfer can start, and what the remote path resolves to).
+Neither was reachable from the suite before; both are now.
+
+Writing those tests found two latent defects, which is the point of the exercise and worth
+recording:
+
+- `RootPuttySessionsNodeInfo` derives from `RootNodeInfo`, so the window's
+  `RootNodes.OfType<RootNodeInfo>().First()` matched the PuTTY sessions root whenever the tree
+  listed it first. The fallback meant to steer imports *away* from PuTTY could therefore land
+  them exactly there, and it threw on a tree with no connection root instead of saying so.
+- The SSH transfer built the uploaded file's name with `LastIndexOf('\')`, which sees only the
+  Windows separator. A local path written with forward slashes - legal on Windows - contains no
+  backslash, so the whole path was appended: `C:/work/notes.txt` went to
+  `/upload/C:/work/notes.txt`.
+
 **Re-evaluate upstream's contract in 4–6 weeks.** If it has stabilised, aligning to a fixed target
 is cheap from this position. If it is still moving, we lost nothing.
 
@@ -68,6 +87,18 @@ is cheap from this position. If it is still moving, we lost nothing.
 
 Once W3 is done, his port-scan rework applies to the extracted component instead of the hardcoded
 window. Resolves the collision with upstream's direction without adopting their code.
+
+**Done, 2026-09-18.** Fourteen commits cherry-picked from PR #161 with `-x`, jafin's authorship
+intact, on branch `feat/161-port-scan-single-field`. Two conflicts, both resolved in his favour:
+`mrngIpTextBox` (he replaces the four-octet control with a plain text box that accepts IPv6) and
+`PortScanner`'s engine, which he rewrites from a ping-callback loop to `Parallel.ForEachAsync`
+with real cancellation. That rewrite **subsumes** our own timeout fix rather than losing it - his
+`IsPortOpenAsync` honours the user's timeout on the TCP connect and names the same ~21s OS
+default our commit did. The message seam went back on afterwards as our own commit, so his
+history stays his.
+
+Not taken from that branch: his `CLAUDE.md` edit, his dependency bumps, and his other PRs'
+work, which is on the same branch but belongs to their own PRs.
 
 ## W5 — Upstream radar
 
