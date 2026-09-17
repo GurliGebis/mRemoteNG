@@ -1,53 +1,63 @@
 # .project-roadmap
 
-Persistent workspace for mRemoteNG fork modernization.
+Working state for the fork: the issue database, the fork-network radar, the orchestrator, and the
+plans and reports they produce. Nothing here ships to users.
 
-## >>> CURRENT PLAN: [CURRENT_PLAN.md](CURRENT_PLAN.md) <<<
+Two documents outrank anything in this folder. [../CHARTER.md](../CHARTER.md) holds what the project
+is for, which rules cannot be bent, and the log of decisions with their reasoning.
+[../CLAUDE.md](../CLAUDE.md) holds the build, test and workflow rules. Read those first; this folder
+is where the work in progress lives.
 
-**Citeste INTOTDEAUNA `CURRENT_PLAN.md` la inceputul fiecarei sesiuni!**
-Contine: ce s-a facut, unde am ramas, lectii critice, plan de executie.
+## Current
 
-## Current: v1.81.0-beta.2
+| | |
+|---|---|
+| Version | 1.83.0 (stable, tagged 2026-08-16) |
+| Current plan | [EXECUTION-PLAN-2026-09.md](EXECUTION-PLAN-2026-09.md) |
+| Why that plan | [UPSTREAM-ALIGNMENT-2026-09-16.md](UPSTREAM-ALIGNMENT-2026-09-16.md) |
 
-Nullable warnings cleanup COMPLETED (2,338 → 0, 100%).
-Branch: `main`
-Release: https://github.com/robertpopa22/mRemoteNG/releases/tag/20260215-v1.81.0-beta.2-NB-(3396)
-
-## Active Files
+## Files
 
 | File | Purpose |
 |------|---------|
-| **`CURRENT_PLAN.md`** | **PLANUL CURENT** — citeste PRIMUL! Warning resolution, progres, lectii |
-| `LESSONS.md` | Build, test, CI, and release lessons learned |
-| `ISSUE_BINARYFORMATTER.md` | Open blocker: DockPanelSuite BinaryFormatter on .NET 10 |
-| `CVE-2023-30367_ASSESSMENT.md` | SecureString migration assessment — deferred to v1.81.0 |
+| `EXECUTION-PLAN-2026-09.md` | The workstreams in flight, each with a checkable "done when" |
+| `UPSTREAM-ALIGNMENT-2026-09-16.md` | The intelligence the plan was derived from — our state, upstream's direction, the divergence arithmetic |
+| `LESSONS.md` | Build, test, CI and release lessons. Ageing; trust it less the older the entry |
+| `DEVELOPER_GUIDE.md` | Orchestrator operations, release checklists, issue tracking |
+| `VERIFICATION_PLAN.md` | What the UI verification is allowed to do, and what it must not |
+| `issues-db/` | The issue database, one JSON per issue, plus generated sync reports |
+| `fork-intel/` | Fork-network radar. `EXCLUDE.json` is the memory of decisions and stays tracked; `db/` is a regenerable harvest cache and is deliberately **not** tracked (see charter D3) |
 
-## Scripts
+## Issue Intelligence System
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/iis_orchestrator.py` | **IIS Orchestrator** — Issue Intelligence System (sync, analyze, update, report) + AI-driven issue/warning resolution |
-| `scripts/find-lesson.ps1` | Search lessons by keyword |
-
-### IIS Quick Reference
 ```bash
-python .project-roadmap/scripts/iis_orchestrator.py sync                    # sync both repos
-python .project-roadmap/scripts/iis_orchestrator.py analyze                 # show actionable items
-python .project-roadmap/scripts/iis_orchestrator.py update --issue N --status triaged
-python .project-roadmap/scripts/iis_orchestrator.py report                  # save markdown report
+python .project-roadmap/scripts/iis_orchestrator.py sync --repos fork     # pull issues and comments
+python .project-roadmap/scripts/iis_orchestrator.py report --repos fork   # what is waiting on us
+python .project-roadmap/scripts/iis_orchestrator.py update --issue N --repo fork --status testing --notes "..."
 ```
+
+## Fork radar
+
+```bash
+python .project-roadmap/fork-intel/fork_intel.py discover   # enumerate active forks
+python .project-roadmap/fork-intel/fork_intel.py diverge    # compare against upstream
+python .project-roadmap/fork-intel/fork_intel.py screen     # drop noise, flag security
+python .project-roadmap/fork-intel/fork_intel.py triage     # one AI judgement per candidate
+python .project-roadmap/fork-intel/fork_intel.py preapprove # the consensus gate (charter D6)
+python .project-roadmap/fork-intel/fork_intel.py report     # ranked report + import queue
+```
+
+`preapprove` votes with independent model families, rotates the triage family out of its own
+verdict, casts one ballot blind, and audits a sample of unanimous approvals. The reasoning is in
+charter D6; do not change its quorum without reading that entry.
 
 ## Archives
 
-| Folder | Contents |
-|--------|----------|
-| `historical/v1.79.0/` | v1.79.0 release cycle (26 PRs, triage, execution logs, scripts) |
-| `historical/v1.80.0/` | v1.80.0 code analysis & error backlog (12 items, all resolved) |
-| `TRIAGE_PLAN_2026-02-10.md` | Historical — 830-issue triage plan for v1.80.0 (completed) |
+`historical/` holds completed release cycles (v1.79.0, v1.80.0) and the 830-issue triage plan from
+February 2026. Kept for provenance, not for guidance.
 
-## Resume Workflow
+---
 
-1. **Read `CURRENT_PLAN.md`** — vezi unde am ramas si ce trebuie facut.
-2. Read `LESSONS.md` before starting any build, test, CI, or release task.
-3. Run `build.ps1` to verify clean build before making changes.
-4. See `../docs/CODE_SIGNING_POLICY.md` for release signing policy.
+*This file used to open by telling every session to read `CURRENT_PLAN.md` first — a file that had
+been deleted — and to announce v1.81.0-beta.2 as current, two stable releases later. If you find
+something here that is no longer true, fixing it is part of the task you are on.*

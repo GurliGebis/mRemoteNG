@@ -1,6 +1,11 @@
 ﻿# mRemoteNG - Build & Development Notes
 
 > **Project canon for all agents.** [AGENTS.md](AGENTS.md) is only the discovery bootstrap for tools that do not load `CLAUDE.md` directly.
+>
+> This file is the **manual**: how to build, how to test, what the workflow is. [CHARTER.md](CHARTER.md)
+> is the **constitution**: what the fork is for, which rules may never be bent and who may bend the
+> rest, and the log of decisions with their reasoning. Where the two disagree, the charter wins and
+> this file gets corrected.
 
 ## Scope boundary — this repository stands alone
 
