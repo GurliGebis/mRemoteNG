@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -93,12 +94,43 @@ namespace mRemoteNG.UI.Forms
 
         private void SetEnvironmentText()
         {
-            textBoxEnvironment.Text = new StringBuilder()
+            StringBuilder environment = new StringBuilder()
                 .AppendLine(CultureInfo.InvariantCulture, $"OS: {Environment.OSVersion}")
                 .AppendLine(CultureInfo.InvariantCulture, $"{GeneralAppInfo.ProductName} Version: {GeneralAppInfo.ApplicationVersion}")
                 .AppendLine("Edition: " + (Runtime.IsPortableEdition ? "Portable" : "MSI"))
-                .AppendLine("Cmd line args: " + string.Join(" ", Environment.GetCommandLineArgs().Skip(1)))
-                .ToString();
+                .AppendLine("Cmd line args: " + string.Join(" ", Environment.GetCommandLineArgs().Skip(1)));
+
+            AppendAssemblyLoadEvidence(environment);
+            textBoxEnvironment.Text = environment.ToString();
+        }
+
+        /// <summary>
+        /// Adds what the loader was doing, but only for a crash that is actually about loading.
+        ///
+        /// Five reports (#175, #191, #192 and the closed #180/#181) named a missing assembly and
+        /// none of them could be taken any further, because the report is identical whether the
+        /// file was never installed, was quarantined by antivirus afterwards, or was lost to a
+        /// half-finished extract. The one fact that separates those - what is actually on disk
+        /// beside the executable right now - is knowable only on the machine that crashed, and we
+        /// were not asking for it.
+        ///
+        /// Attached only when a load failed, so an ordinary crash report does not carry a
+        /// directory listing nobody needs.
+        /// </summary>
+        private static void AppendAssemblyLoadEvidence(StringBuilder environment)
+        {
+            IReadOnlyList<string> history = ProgramRoot.AssemblyResolveHistory;
+            bool anyFailure = history.Any(entry => entry.Contains("NOT FOUND", StringComparison.Ordinal));
+            if (!anyFailure)
+                return;
+
+            environment.AppendLine().AppendLine("Assembly resolution:");
+            foreach (string entry in history)
+                environment.AppendLine("  " + entry);
+
+            environment.AppendLine("Installed assemblies:");
+            foreach (string line in ProgramRoot.ShippedAssemblySnapshot())
+                environment.AppendLine("  " + line);
         }
 
         private void SetLanguage()

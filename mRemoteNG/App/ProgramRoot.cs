@@ -5,11 +5,13 @@ using mRemoteNG.Config.Settings;
 using mRemoteNG.UI.Forms;
 using mRemoteNG.Resources.Language;
 using System;
+using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -142,6 +144,70 @@ namespace mRemoteNG.App
         // under the application base path to avoid loading from arbitrary locations.
         private static readonly string _appBaseDir = AppDomain.CurrentDomain.BaseDirectory;
 
+        /// <summary>
+        /// What the resolve handler was asked for and what it did about it, newest last.
+        ///
+        /// A failed assembly load is the one crash that arrives with nothing to work with. It
+        /// happens before any log writer is attached, and the report that reaches us names the
+        /// assembly and nothing else - not where we looked, not what was actually on disk beside
+        /// the executable. Four such reports (#175, #191, #192 and the closed #180/#181) named
+        /// ExternalConnectors and none of them could be taken further, because the same report is
+        /// produced whether the file was never installed, was quarantined by antivirus after
+        /// install, or was overwritten by a partial extract.
+        ///
+        /// This is a fixed-size in-memory record with no I/O of its own: the crash reporter reads
+        /// it when there is something to report. It never holds anything but assembly names and
+        /// paths under the application directory.
+        /// </summary>
+        private static readonly System.Collections.Concurrent.ConcurrentQueue<string> _resolveLog = new();
+
+        private const int ResolveLogLimit = 40;
+
+        private static void RecordResolveAttempt(string line)
+        {
+            _resolveLog.Enqueue(line);
+            while (_resolveLog.Count > ResolveLogLimit && _resolveLog.TryDequeue(out _))
+            {
+            }
+        }
+
+        /// <summary>
+        /// The resolve history, for a crash report. Empty when nothing ever failed to load.
+        /// </summary>
+        internal static IReadOnlyList<string> AssemblyResolveHistory => [.. _resolveLog];
+
+        /// <summary>
+        /// What is actually sitting beside the executable and in Assemblies\, for a crash report.
+        ///
+        /// The question a loader failure raises is whether the file is there at all, and only the
+        /// user's machine can answer it. Names only - no sizes, no versions, nothing from outside
+        /// the application directory.
+        /// </summary>
+        internal static IReadOnlyList<string> ShippedAssemblySnapshot()
+        {
+            List<string> found = [];
+            try
+            {
+                foreach (string dir in new[] { _appBaseDir, Path.Combine(_appBaseDir, "Assemblies") })
+                {
+                    if (!Directory.Exists(dir))
+                    {
+                        found.Add($"{Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar))}\\ : (missing)");
+                        continue;
+                    }
+
+                    string[] names = [.. Directory.EnumerateFiles(dir, "*.dll").Select(Path.GetFileName).Where(n => n is not null)!];
+                    Array.Sort(names, StringComparer.OrdinalIgnoreCase);
+                    found.Add($"{(dir == _appBaseDir ? "." : "Assemblies")}\\ ({names.Length} dll): {string.Join(", ", names)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                found.Add($"(could not list: {ex.GetType().Name})");
+            }
+            return found;
+        }
+
         private static Assembly? OnAssemblyResolve(object? sender, ResolveEventArgs args)
         {
             try
@@ -167,11 +233,24 @@ namespace mRemoteNG.App
                 string assemblyPath = Path.Combine(_appBaseDir, "Assemblies", assemblyFile);
 
                 if (File.Exists(assemblyPath) && IsUnderAppBase(assemblyPath))
+                {
+                    RecordResolveAttempt($"{name}: resolved from Assemblies\\");
                     return Assembly.LoadFrom(assemblyPath);
+                }
+
+                // Nothing was found and the runtime is about to throw. Record where we looked and
+                // whether the file the caller wanted is beside the executable, because that single
+                // fact separates "never shipped" from "removed after install" - and the crash
+                // report cannot be read without it.
+                RecordResolveAttempt(
+                    $"{name}: NOT FOUND (probed Assemblies\\; beside exe: "
+                    + (File.Exists(Path.Combine(_appBaseDir, assemblyFile)) ? "present" : "absent") + ")");
             }
-            catch
+            catch (Exception ex)
             {
-                // Suppress resolution exceptions; return null to continue standard probing
+                // Resolution must never throw into the runtime's loader. Recording that it went
+                // wrong is still worth more than silence.
+                RecordResolveAttempt($"(resolve handler failed: {ex.GetType().Name})");
             }
             return null;
         }
