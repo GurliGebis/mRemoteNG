@@ -6,6 +6,13 @@ namespace mRemoteNGTests.Tools
 {
     public class PortListParserTests
     {
+        // Hoisted so the expectation is named once and the analyzer stops flagging a fresh array
+        // allocated on every call (CA1861).
+        private static readonly int[] SshHttpHttpsRdp = [22, 80, 443, 3389];
+        private static readonly int[] SshAndHttp = [22, 80];
+        private static readonly int[] Ports8000To8003 = [8000, 8001, 8002, 8003];
+        private static readonly int[] MixedListAndRange = [22, 80, 443, 8000, 8001, 8002];
+
         [Test]
         public void ListOfPortsIsParsed()
         {
@@ -14,7 +21,7 @@ namespace mRemoteNGTests.Tools
             Assert.Multiple(() =>
             {
                 Assert.That(parsed, Is.True, error);
-                Assert.That(ports, Is.EqualTo(new[] { 22, 80, 443, 3389 }));
+                Assert.That(ports, Is.EqualTo(SshHttpHttpsRdp));
             });
         }
 
@@ -22,33 +29,37 @@ namespace mRemoteNGTests.Tools
         [TestCase("  443 ,22,  80 ")]
         public void SemicolonsSpacesAndPaddingAreAccepted(string input)
         {
-            PortListParser.TryParse(input, out List<int> ports, out string error);
+            bool parsed = PortListParser.TryParse(input, out List<int> ports, out string error);
 
-            Assert.That(ports, Is.SupersetOf(new[] { 22, 80 }), error);
+            Assert.That(parsed, Is.True, error);
+            Assert.That(ports, Is.SupersetOf(SshAndHttp), error);
         }
 
         [Test]
         public void RangeIsExpanded()
         {
-            PortListParser.TryParse("8000-8003", out List<int> ports, out _);
+            bool parsed = PortListParser.TryParse("8000-8003", out List<int> ports, out string error);
 
-            Assert.That(ports, Is.EqualTo(new[] { 8000, 8001, 8002, 8003 }));
+            Assert.That(parsed, Is.True, error);
+            Assert.That(ports, Is.EqualTo(Ports8000To8003));
         }
 
         [Test]
         public void MixedListAndRangeIsSortedAndDeduplicated()
         {
-            PortListParser.TryParse("443, 22, 80, 8000-8002, 80, 8001", out List<int> ports, out _);
+            bool parsed = PortListParser.TryParse("443, 22, 80, 8000-8002, 80, 8001", out List<int> ports, out string error);
 
-            Assert.That(ports, Is.EqualTo(new[] { 22, 80, 443, 8000, 8001, 8002 }));
+            Assert.That(parsed, Is.True, error);
+            Assert.That(ports, Is.EqualTo(MixedListAndRange));
         }
 
         [Test]
         public void ReversedRangeIsNormalised()
         {
-            PortListParser.TryParse("8003-8000", out List<int> ports, out _);
+            bool parsed = PortListParser.TryParse("8003-8000", out List<int> ports, out string error);
 
-            Assert.That(ports, Is.EqualTo(new[] { 8000, 8001, 8002, 8003 }));
+            Assert.That(parsed, Is.True, error);
+            Assert.That(ports, Is.EqualTo(Ports8000To8003));
         }
 
         [TestCase("")]

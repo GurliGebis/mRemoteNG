@@ -40,10 +40,12 @@ namespace mRemoteNGTests.Tools
         [Test]
         public void ReversedRangeIsNormalised()
         {
-            IpRangeParser.TryParse("192.168.1.254 - 192.168.1.1", out IPAddress? start, out IPAddress? end, out _);
+            bool parsed = IpRangeParser.TryParse("192.168.1.254 - 192.168.1.1",
+                                                 out IPAddress? start, out IPAddress? end, out string error);
 
             Assert.Multiple(() =>
             {
+                Assert.That(parsed, Is.True, error);
                 Assert.That(start?.ToString(), Is.EqualTo("192.168.1.1"));
                 Assert.That(end?.ToString(), Is.EqualTo("192.168.1.254"));
             });

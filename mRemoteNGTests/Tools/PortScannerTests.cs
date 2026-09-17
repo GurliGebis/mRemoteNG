@@ -11,6 +11,7 @@ namespace mRemoteNGTests.Tools;
 public class PortScannerTests
 {
     private static readonly int[] Port80 = [80];
+    private static readonly int[] RdpPortOnly = [3389];
 
     private static List<IPAddress> GetScannedAddresses(PortScanner scanner)
     {
@@ -184,7 +185,7 @@ public class PortScannerTests
             IPAddress.Parse("192.168.1.1"),
             0, 3389);
 
-        Assert.That(GetScannedPorts(scanner), Is.EqualTo(new[] { 3389 }));
+        Assert.That(GetScannedPorts(scanner), Is.EqualTo(RdpPortOnly));
     }
 
     [TestCase(0, 0)]
