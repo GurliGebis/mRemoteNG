@@ -8,17 +8,28 @@
   "created_at": "2026-09-16T12:30:11Z",
   "github_updated_at": "2026-09-16T12:30:11Z",
   "body_snippet": "# Host reachability status icon shows \"Reachable\" for offline/unreachable hosts (false positives behind Zscaler/ZTNA), plus related bugs found and fixed along the way\n\n## Summary\n\nThe connection tree (and a separate button in the Config panel) show a reachability icon\n(online/offline) per connection, computed by `mRemoteNG/Tools/HostStatusMonitor.cs` (see issue\n#1109). The original implementation determined reachability with a single, weak check: open a raw\nTCP connection to the host's port and ...",
-  "our_status": "new",
+  "our_status": "needs_info",
   "priority": null,
   "target_release": null,
   "our_branch": null,
   "our_pr": null,
-  "iterations": [],
+  "iterations": [
+    {
+      "seq": 1,
+      "date": "2026-09-18",
+      "type": "needs_info",
+      "description": "Status changed to needs_info",
+      "pr": null,
+      "branch": null,
+      "release": null,
+      "comment_posted": false
+    }
+  ],
   "comments": [],
   "comments_cursor": "2026-09-16T12:30:11Z",
   "unread_comments": 0,
   "needs_action": true,
   "waiting_for_us": true,
-  "last_synced": "2026-09-16T18:56:37Z",
-  "notes": ""
+  "last_synced": "2026-09-17T21:17:49Z",
+  "notes": "Both premises verified in source: HostStatusMonitor.IsReachableAsync is a bare TCP connect, and ConfigWindow has a second independent one. No patch attached; asked for PR + whether host is powered off vs port closed."
 }
