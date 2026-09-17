@@ -23,18 +23,27 @@ namespace mRemoteNG.Tools
         private readonly List<ScanHost> _scannedHosts = [];
         private readonly int _timeoutInMilliseconds;
 
+        /// <summary>
+        /// Where this scan reports progress. Defaults to the application's message collector, so
+        /// nothing changes for the running product; a test supplies its own and can then construct
+        /// a scanner without constructing the notification stack behind it.
+        /// </summary>
+        private readonly IOperationMessageSink _messages;
+
         #region Public Methods
 
         public PortScanner(IPAddress ipAddress1,
                            IPAddress ipAddress2,
                            IEnumerable<int> ports,
-                           int timeoutInMilliseconds = 5000)
+                           int timeoutInMilliseconds = 5000,
+                           IOperationMessageSink? messageSink = null)
         {
             IPAddress ipAddressStart = IpAddressMin(ipAddress1, ipAddress2);
             IPAddress ipAddressEnd = IpAddressMax(ipAddress1, ipAddress2);
 
             ArgumentOutOfRangeException.ThrowIfNegative(timeoutInMilliseconds);
 
+            _messages = messageSink ?? new DefaultMessageSink();
             _timeoutInMilliseconds = timeoutInMilliseconds;
             _ports.Clear();
             _ports.AddRange(ports);
@@ -50,8 +59,10 @@ namespace mRemoteNG.Tools
                            int port1,
                            int port2,
                            int timeoutInMilliseconds = 5000,
-                           bool checkDefaultPortsOnly = false)
+                           bool checkDefaultPortsOnly = false,
+                           IOperationMessageSink? messageSink = null)
         {
+            _messages = messageSink ?? new DefaultMessageSink();
             IPAddress ipAddressStart = IpAddressMin(ipAddress1, ipAddress2);
             IPAddress ipAddressEnd = IpAddressMax(ipAddress1, ipAddress2);
 
@@ -162,7 +173,7 @@ namespace mRemoteNG.Tools
             try
             {
                 _hostCount = 0;
-                Runtime.MessageCollector.AddMessage(MessageClass.InformationMsg, $"Tools.PortScan: Starting scan of {_ipAddresses.Count} hosts...", true);
+                _messages.Information($"Tools.PortScan: Starting scan of {_ipAddresses.Count} hosts...", true);
                 foreach (IPAddress ipAddress in _ipAddresses)
                 {
                     RaiseBeginHostScanEvent(ipAddress);
@@ -177,13 +188,13 @@ namespace mRemoteNG.Tools
                     }
                     catch (Exception ex)
                     {
-                        Runtime.MessageCollector.AddMessage(MessageClass.WarningMsg, $"Tools.PortScan: Ping failed for {ipAddress} {Environment.NewLine} {ex.Message}", true);
+                        _messages.Warning($"Tools.PortScan: Ping failed for {ipAddress} {Environment.NewLine} {ex.Message}", true);
                     }
                 }
             }
             catch (Exception ex)
             {
-                Runtime.MessageCollector.AddMessage(MessageClass.WarningMsg, $"StartScanBG failed (Tools.PortScan) {Environment.NewLine} {ex.Message}", true);
+                _messages.Warning($"StartScanBG failed (Tools.PortScan) {Environment.NewLine} {ex.Message}", true);
             }
         }
 
@@ -200,14 +211,14 @@ namespace mRemoteNG.Tools
             ScanHost scanHost = new(ip);
             _hostCount++;
 
-            Runtime.MessageCollector.AddMessage(MessageClass.InformationMsg,
+            _messages.Information(
                                                 $"Tools.PortScan: Scanning {_hostCount} of {_ipAddresses.Count} hosts: {scanHost.HostIp}",
                                                 true);
 
 
             if (e.Cancelled)
             {
-                Runtime.MessageCollector.AddMessage(MessageClass.InformationMsg,
+                _messages.Information(
                                                     $"Tools.PortScan: CANCELLED host: {scanHost.HostIp}", true);
                 // cleanup
                 p.PingCompleted -= PingSender_PingCompleted;
@@ -217,7 +228,7 @@ namespace mRemoteNG.Tools
 
             if (e.Error != null)
             {
-                Runtime.MessageCollector.AddMessage(MessageClass.InformationMsg,
+                _messages.Information(
                                                     $"Ping failed to {e.UserState} {Environment.NewLine} {e.Error.Message}",
                                                     true);
                 scanHost.ClosedPorts.AddRange(_ports);
@@ -232,7 +243,7 @@ namespace mRemoteNG.Tools
                 }
                 catch (Exception dnsex)
                 {
-                    Runtime.MessageCollector.AddMessage(MessageClass.InformationMsg,
+                    _messages.Information(
                                                         $"Tools.PortScan: Could not resolve {scanHost.HostIp} {Environment.NewLine} {dnsex.Message}",
                                                         true);
                 }
@@ -287,7 +298,7 @@ namespace mRemoteNG.Tools
             }
             else if (e.Reply?.Status != IPStatus.Success)
             {
-                Runtime.MessageCollector.AddMessage(MessageClass.InformationMsg,
+                _messages.Information(
                                                     $"Ping did not complete to {e.UserState} : {e.Reply?.Status}", true);
                 scanHost.ClosedPorts.AddRange(_ports);
                 scanHost.SetAllProtocols(false);
@@ -298,7 +309,7 @@ namespace mRemoteNG.Tools
             p.Dispose();
 
             string h = string.IsNullOrEmpty(scanHost.HostName) ? "HostNameNotFound" : scanHost.HostName;
-            Runtime.MessageCollector.AddMessage(MessageClass.InformationMsg,
+            _messages.Information(
                                                 $"Tools.PortScan: Scan of {scanHost.HostIp} ({h}) complete.", true);
 
             _scannedHosts.Add(scanHost);
