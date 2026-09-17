@@ -15,9 +15,11 @@ Run:
     python .project-roadmap/fork-intel/test_fork_intel.py
 """
 
+import re
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -385,6 +387,152 @@ class PanelIndependenceTests(unittest.TestCase):
         votes = [{"vote": "APPROVE"}, {"vote": "NO_ANSWER"}, {"vote": None}, {"vote": "REJECT"}]
         self.assertEqual(["APPROVE", "REJECT"],
                          [v["vote"] for v in fi.answered_votes(votes)])
+
+
+class ComparePaginationTests(unittest.TestCase):
+    """The compare endpoint caps `commits` at 250 and reports the real count in
+    `total_commits`; these pin the paging that recovers the rest."""
+
+    @staticmethod
+    def _commits(n, prefix):
+        return [{"sha": f"{prefix}{i:04d}",
+                 "commit": {"message": f"{prefix} commit {i}",
+                            "author": {"name": "Someone", "date": "2026-07-01T00:00:00Z"}},
+                 "author": {"login": "someone"}, "parents": [], "html_url": "https://x"}
+                for i in range(n)]
+
+    def _fake_gh_json(self, pages, total_commits):
+        def fake(endpoint, paginate=False):
+            match = re.search(r"page=(\d+)", endpoint)
+            index = int(match.group(1)) - 1
+            if index < len(pages):
+                return {"total_commits": total_commits, "ahead_by": total_commits,
+                        "behind_by": 0, "merge_base_commit": {"sha": "base"},
+                        "commits": pages[index]}
+            return {"total_commits": total_commits, "commits": []}
+        return fake
+
+    def test_pages_past_the_250_cap_are_all_collected(self):
+        pages = [self._commits(100, "p1-"), self._commits(100, "p2-"),
+                 self._commits(100, "p3-"), self._commits(40, "p4-")]
+        with patch.object(fi, "gh_json", side_effect=self._fake_gh_json(pages, 340)):
+            result = fi.compare_commits("mRemoteNG/mRemoteNG", "main", "someone", "branch")
+
+        self.assertEqual(340, len(result["commits"]))
+        self.assertEqual(340, result["total_commits"])
+        self.assertFalse(result["truncated"])
+
+    def test_a_page_running_dry_early_is_reported_as_truncated(self):
+        pages = [self._commits(100, "p1-"), self._commits(100, "p2-")]
+        with patch.object(fi, "gh_json", side_effect=self._fake_gh_json(pages, 340)):
+            result = fi.compare_commits("mRemoteNG/mRemoteNG", "main", "someone", "branch")
+
+        self.assertEqual(200, len(result["commits"]))
+        self.assertTrue(result["truncated"])
+
+    def test_first_call_failure_returns_none(self):
+        with patch.object(fi, "gh_json", return_value=None):
+            self.assertIsNone(
+                fi.compare_commits("mRemoteNG/mRemoteNG", "main", "someone", "branch"))
+
+
+class TrustSourceNoiseTests(unittest.TestCase):
+    """is_noise(trust_source=True) is how the upstream feed is screened: those
+    commits were all written by upstream maintainers, so the one rule that would
+    drop the entire feed is skipped - every other layer still applies."""
+
+    def test_trust_source_keeps_an_upstream_maintainer_commit(self):
+        c = commit("Update sql_configuration.rst", author_name="Dimitrij", author_login="dimitrij")
+        self.assertIsNone(fi.is_noise(c, RULES, set(), trust_source=True))
+
+    def test_default_still_drops_the_same_commit(self):
+        c = commit("Update sql_configuration.rst", author_name="Dimitrij", author_login="dimitrij")
+        self.assertIsNotNone(fi.is_noise(c, RULES, set()))
+
+    def test_trust_source_still_drops_a_bot_author(self):
+        c = commit("Add retry to connect", author_name="dependabot[bot]",
+                   author_login="dependabot[bot]")
+        reason = fi.is_noise(c, RULES, set(), trust_source=True)
+        self.assertIn("bot author", reason)
+
+    def test_trust_source_still_drops_a_merge_commit(self):
+        c = commit("Merge pull request #8 from x/y", parents=2)
+        self.assertEqual("merge commit", fi.is_noise(c, RULES, set(), trust_source=True))
+
+
+class CandidateKindTests(unittest.TestCase):
+    def test_legacy_record_without_kind_is_fork(self):
+        self.assertEqual("fork", fi.candidate_kind({"sha": "abc"}))
+
+    def test_explicit_kind_is_respected(self):
+        self.assertEqual("upstream", fi.candidate_kind({"sha": "abc", "kind": "upstream"}))
+
+
+class OurHistorySubjectsRefTests(unittest.TestCase):
+    """git log --all also walks fetched-but-unmerged remote refs (like `upstream`),
+    which silently matched fork/upstream candidates as "already in our history"."""
+
+    def test_passes_the_given_ref_and_not_all(self):
+        calls = []
+
+        def fake_git(args, cwd=fi.REPO_ROOT):
+            calls.append(args)
+            return "fix: something\n"
+
+        with patch.object(fi, "git", side_effect=fake_git):
+            fi.our_history_subjects("origin/main")
+
+        self.assertEqual(1, len(calls))
+        self.assertIn("origin/main", calls[0])
+        self.assertNotIn("--all", calls[0])
+
+    def test_defaults_to_head_not_all(self):
+        calls = []
+
+        def fake_git(args, cwd=fi.REPO_ROOT):
+            calls.append(args)
+            return ""
+
+        with patch.object(fi, "git", side_effect=fake_git):
+            fi.our_history_subjects()
+
+        self.assertIn("HEAD", calls[0])
+        self.assertNotIn("--all", calls[0])
+
+
+class UpstreamTriagePromptTests(unittest.TestCase):
+    """A single triage prompt must never mix fork and upstream framing, and both
+    framings must still ask the model for the same JSON."""
+
+    @staticmethod
+    def _batch(kind):
+        cand = {"sha": "a" * 40, "fork": "someone/mRemoteNG", "subject": "Do a thing",
+                "stats": {"files": 1, "additions": 1, "deletions": 0}, "files": [],
+                "patch": "diff"}
+        if kind is not None:
+            cand["kind"] = kind
+        return [cand]
+
+    SCHEMA_LINE = '"action":"IMPORT|REIMPLEMENT|WATCH|REJECT","rationale":"<= 30 words"}]'
+
+    def test_upstream_prompt_differs_from_fork_prompt(self):
+        with patch.object(fi, "related_history", return_value=[]):
+            fork_prompt = fi.build_triage_prompt(self._batch("fork"), [])
+            upstream_prompt = fi.build_triage_prompt(self._batch("upstream"), [])
+        self.assertNotEqual(fork_prompt, upstream_prompt)
+
+    def test_both_still_demand_the_same_json_schema(self):
+        with patch.object(fi, "related_history", return_value=[]):
+            fork_prompt = fi.build_triage_prompt(self._batch("fork"), [])
+            upstream_prompt = fi.build_triage_prompt(self._batch("upstream"), [])
+        self.assertIn(self.SCHEMA_LINE, fork_prompt)
+        self.assertIn(self.SCHEMA_LINE, upstream_prompt)
+
+    def test_legacy_batch_with_no_kind_gets_fork_framing(self):
+        with patch.object(fi, "related_history", return_value=[]):
+            no_kind_prompt = fi.build_triage_prompt(self._batch(None), [])
+            fork_prompt = fi.build_triage_prompt(self._batch("fork"), [])
+        self.assertEqual(fork_prompt, no_kind_prompt)
 
 
 if __name__ == "__main__":

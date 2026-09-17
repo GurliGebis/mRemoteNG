@@ -12,10 +12,15 @@ Pipeline (each stage writes JSON and is resumable):
 
     discover -> diverge -> screen -> triage -> preapprove -> report -> mark
 
+`upstream` is a second, independent source feeding the same screen/triage/report
+machinery: nothing else watches UPSTREAM's own default branch directly, which is
+how unseen upstream commits accumulate silently between runs.
+
 Usage:
     python fork_intel.py discover   [--since-months 6] [--limit N]
     python fork_intel.py diverge    [--all-branches] [--limit N]
     python fork_intel.py screen     [--limit N]
+    python fork_intel.py upstream   [--limit N] [--refresh] [--base <ref>]
     python fork_intel.py triage     [--agent claude|codex|gemini] [--shard i/n]
     python fork_intel.py preapprove [--reviewers codex,gemini] [--arbiter grok]
     python fork_intel.py report
@@ -179,6 +184,16 @@ def iter_candidates():
             yield path, data
 
 
+def candidate_kind(cand):
+    """The candidate's source: "fork" or "upstream".
+
+    Thousands of candidate files predate this field, so a missing key means "fork" -
+    the only source that existed before upstream tracking was added - rather than
+    forcing a migration pass over the whole database.
+    """
+    return cand.get("kind", "fork")
+
+
 # -------------------------------------------------------------------- discover
 
 def cmd_discover(args):
@@ -315,6 +330,54 @@ def fork_branches_to_scan(fork, upstream_heads, default_branch):
     return keep, inherited
 
 
+def compare_commits(base_repo, base_ref, head_owner, head_ref):
+    """Compare two refs through GitHub's compare API, collecting every commit.
+
+    The endpoint's `commits` array is capped at 250 when the call carries no paging
+    parameters, while the true count lives in `total_commits` - so a comparison
+    deeper than 250 commits silently lost its tail. The obvious fix, calling the
+    capped endpoint once and then appending `page=2,3,...&per_page=100`, was checked
+    against a live 580-commit upstream compare and against `git rev-list` ground
+    truth before landing here: it produces gaps and duplicates, because the
+    unparameterized call and the `per_page`-paginated calls walk the commit list in
+    different orders and are not a continuation of each other (the unparameterized
+    250 turned out to line up with the *last* three pages of the paginated walk, not
+    the first two). The combination verified to reconstruct the exact commit set with
+    no gaps and no duplicates is `page=1,2,3,...&per_page=100`, uniformly, starting
+    from the very first call - so that is what this does.
+
+    Returns None when the first call fails, matching the pre-existing error handling
+    at every call site. `truncated` is True only when paging stops (a page came back
+    empty) before `total_commits` commits were collected.
+    """
+    endpoint = f"repos/{base_repo}/compare/{base_ref}...{head_owner}:{head_ref}"
+    per_page = 100
+    page = 1
+    first = gh_json(f"{endpoint}?page={page}&per_page={per_page}")
+    if first is None:
+        return None
+
+    total = first.get("total_commits", len(first.get("commits") or []))
+    commits = list(first.get("commits") or [])
+
+    while len(commits) < total:
+        page += 1
+        batch = gh_json(f"{endpoint}?page={page}&per_page={per_page}")
+        page_commits = (batch or {}).get("commits") or []
+        if not page_commits:
+            break
+        commits.extend(page_commits)
+
+    return {
+        "ahead_by": first.get("ahead_by"),
+        "behind_by": first.get("behind_by"),
+        "merge_base": (first.get("merge_base_commit") or {}).get("sha"),
+        "total_commits": total,
+        "commits": commits,
+        "truncated": len(commits) < total,
+    }
+
+
 def cmd_diverge(args):
     """Compare each candidate fork against upstream and record its own commits."""
     meta = load_meta()
@@ -360,7 +423,7 @@ def cmd_diverge(args):
             continue
 
         owner = fork["owner"]
-        cmp_data = gh_json(f"repos/{UPSTREAM}/compare/{base_branch}...{owner}:{branch}")
+        cmp_data = compare_commits(UPSTREAM, base_branch, owner, branch)
         if cmp_data is None:
             fork["status"] = "error"
             fork["error"] = "compare failed"
@@ -371,7 +434,7 @@ def cmd_diverge(args):
         fork["base_branch"] = base_branch
         fork["ahead_by"] = cmp_data.get("ahead_by", 0)
         fork["behind_by"] = cmp_data.get("behind_by", 0)
-        fork["merge_base"] = (cmp_data.get("merge_base_commit") or {}).get("sha")
+        fork["merge_base"] = cmp_data.get("merge_base")
         fork["compared_at"] = utc_now()
         fork.pop("error", None)
 
@@ -410,8 +473,7 @@ def cmd_diverge(args):
             fork["branches_scanned"] = [branch] + side_branches
             fork["branches_inherited_from_upstream"] = inherited
             for side in side_branches:
-                side_cmp = gh_json(
-                    f"repos/{UPSTREAM}/compare/{base_branch}...{owner}:{side}")
+                side_cmp = compare_commits(UPSTREAM, base_branch, owner, side)
                 if side_cmp is None:
                     continue
                 gained = collect_commits(side_cmp, side, by_sha)
@@ -466,14 +528,31 @@ def normalize_subject(subject):
     return " ".join(s.split())
 
 
-def our_history_subjects():
-    """Normalized subjects of every commit we already carry."""
-    out = git(["log", "--all", "--format=%s"])
+def our_history_subjects(ref="HEAD"):
+    """Normalized subjects of every commit we already carry.
+
+    `git log --all` walks every configured remote's refs, not just what we merged:
+    in this checkout `upstream` is a configured remote, and `git log --all` returns
+    9004 commits against 8123 for `git log HEAD` - 881 commits we have only FETCHED
+    and never merged. Those were being matched as "already in our history" here,
+    which silently drops real fork candidates that happen to share a fetched-but-
+    unmerged upstream commit's wording, and would drop the entire upstream feed
+    (every one of its own commits trivially "matches" itself). `ref` defaults to
+    HEAD, our actual merged history.
+    """
+    out = git(["log", ref, "--format=%s"])
     return {normalize_subject(line) for line in out.splitlines() if line.strip()}
 
 
-def is_noise(commit, rules, our_subjects):
-    """Layer A. Return a reason string when the commit should be dropped."""
+def is_noise(commit, rules, our_subjects, trust_source=False):
+    """Layer A. Return a reason string when the commit should be dropped.
+
+    trust_source=True skips the upstream_maintainers check. That rule exists to drop
+    merge-base artifacts authored by upstream maintainers out of a FORK's commit list
+    (a fork inherits pre-fork history still authored by upstream's own people). On the
+    upstream feed itself those same people wrote everything, so the same rule would
+    drop the whole feed rather than a sliver of merge-base noise.
+    """
     noise = rules["noise"]
     subject = commit.get("subject") or ""
     norm = normalize_subject(subject)
@@ -486,10 +565,11 @@ def is_noise(commit, rules, our_subjects):
         if bot.lower() in author:
             return f"bot author ({bot})"
 
-    for maintainer in noise["upstream_maintainers"]:
-        if maintainer.lower() == (commit.get("author_login") or "").lower() or \
-           maintainer.lower() == (commit.get("author_name") or "").lower():
-            return f"upstream maintainer ({maintainer}) - merge-base artifact"
+    if not trust_source:
+        for maintainer in noise["upstream_maintainers"]:
+            if maintainer.lower() == (commit.get("author_login") or "").lower() or \
+               maintainer.lower() == (commit.get("author_name") or "").lower():
+                return f"upstream maintainer ({maintainer}) - merge-base artifact"
 
     for pattern in noise["subject_patterns"]:
         if re.search(pattern, subject.strip(), re.IGNORECASE):
@@ -586,6 +666,7 @@ def cmd_screen(args):
                     drop_reasons.get(reason.split("(")[0].strip(), 0) + 1
                 write_json(cand_path, {
                     "sha": sha, "fork": fork["full_name"], "owner": fork["owner"],
+                    "kind": "fork",
                     "subject": commit.get("subject"), "author_name": commit.get("author_name"),
                     "author_login": commit.get("author_login"), "date": commit.get("date"),
                     "html_url": commit.get("html_url"),
@@ -610,6 +691,7 @@ def cmd_screen(args):
                 "sha": sha,
                 "fork": fork["full_name"],
                 "owner": fork["owner"],
+                "kind": "fork",
                 "subject": commit.get("subject"),
                 "body": (detail.get("commit", {}).get("message") or "")[:2000],
                 "author_name": commit.get("author_name"),
@@ -644,6 +726,154 @@ def cmd_screen(args):
     save_meta(meta, "screen", {
         "commits_seen": total, "dropped": dropped, "quarantined": quarantined,
         "clean": kept, "reused": reused,
+    })
+    return 0
+
+
+# -------------------------------------------------------------------- upstream
+
+def _commit_from_compare_entry(entry):
+    """Turn one GitHub compare-endpoint commit entry into our internal commit shape."""
+    commit = entry.get("commit", {}) or {}
+    author = commit.get("author", {}) or {}
+    return {
+        "sha": entry.get("sha"),
+        "subject": (commit.get("message") or "").split("\n", 1)[0],
+        "author_name": author.get("name"),
+        "author_login": (entry.get("author") or {}).get("login"),
+        "date": author.get("date"),
+        "parents": len(entry.get("parents") or []),
+        "html_url": entry.get("html_url"),
+    }
+
+
+def cmd_upstream(args):
+    """Compare our fork against upstream's own default branch and screen its commits.
+
+    Nothing in this pipeline watched UPSTREAM directly before this, which is how 525
+    unseen upstream commits accumulated: `diverge`/`screen` only ever look at forks.
+    This is the second source feeding the same screen/triage/report machinery -
+    candidates are written to the same CANDIDATES_DIR, in the same shape cmd_screen
+    writes, tagged kind="upstream", so triage/report/mark need no special cases
+    beyond grouping by kind (triage) and a separate section (report).
+    """
+    meta = load_meta()
+    rules = load_rules()
+
+    upstream_repo = gh_json(f"repos/{UPSTREAM}")
+    upstream_branch = (upstream_repo or {}).get("default_branch")
+    if not upstream_branch:
+        log("! cannot read upstream default branch")
+        return 2
+    upstream_owner = UPSTREAM.split("/", 1)[0]
+
+    our_owner = OUR_FORK.split("/", 1)[0]
+    our_branch = args.base
+    if not our_branch:
+        our_repo = gh_json(f"repos/{OUR_FORK}")
+        our_branch = (our_repo or {}).get("default_branch")
+    if not our_branch:
+        log("! cannot read our fork's default branch")
+        return 2
+
+    log(f"Comparing {UPSTREAM}@{upstream_branch} against {OUR_FORK}@{our_branch}")
+
+    # base = our own branch, head = upstream's default branch: compare/{base}...{head}
+    # returns commits reachable from head but not base, so `commits` here are exactly
+    # upstream's own commits we do not have - verified live against
+    # `git rev-list <our-branch>..upstream/<upstream-branch>` before relying on it.
+    cmp_data = compare_commits(UPSTREAM, f"{our_owner}:{our_branch}", upstream_owner, upstream_branch)
+    if cmp_data is None:
+        log("! compare failed")
+        return 2
+    if cmp_data.get("truncated"):
+        log(f"  ! only collected {len(cmp_data['commits'])}/{cmp_data['total_commits']} "
+            f"commits (compare API kept truncating)")
+
+    our_subjects = our_history_subjects()
+    log(f"  {cmp_data['total_commits']} commits on upstream we do not have "
+        f"({len(cmp_data['commits'])} collected)")
+
+    seen = dropped = kept = quarantined = reused = 0
+    drop_reasons = {}
+
+    for entry in cmp_data["commits"]:
+        sha = entry.get("sha")
+        if not sha:
+            continue
+        seen += 1
+        if args.limit and kept >= args.limit:
+            break
+
+        commit = _commit_from_compare_entry(entry)
+
+        cand_path = CANDIDATES_DIR / f"{sha[:10]}.json"
+        existing = read_json(cand_path)
+        if existing and not args.refresh:
+            reused += 1
+            continue
+
+        reason = is_noise(commit, rules, our_subjects, trust_source=True)
+        if reason:
+            dropped += 1
+            drop_reasons[reason.split("(")[0].strip()] = \
+                drop_reasons.get(reason.split("(")[0].strip(), 0) + 1
+            write_json(cand_path, {
+                "sha": sha, "fork": UPSTREAM, "owner": upstream_owner, "kind": "upstream",
+                "subject": commit["subject"], "author_name": commit["author_name"],
+                "author_login": commit["author_login"], "date": commit["date"],
+                "html_url": commit["html_url"],
+                "status": "dropped", "drop_reason": reason,
+                "screened_at": utc_now(),
+            })
+            continue
+
+        detail = gh_json(f"repos/{UPSTREAM}/commits/{sha}")
+        if detail is None:
+            continue
+        files = detail.get("files") or []
+        flags, stats = screen_files(files, rules)
+        status = "quarantine" if flags else "screened"
+        if flags:
+            quarantined += 1
+        else:
+            kept += 1
+
+        write_json(cand_path, {
+            "sha": sha,
+            "fork": UPSTREAM,
+            "owner": upstream_owner,
+            "kind": "upstream",
+            "subject": commit["subject"],
+            "body": (detail.get("commit", {}).get("message") or "")[:2000],
+            "author_name": commit["author_name"],
+            "author_login": commit["author_login"],
+            "date": commit["date"],
+            "html_url": commit["html_url"],
+            "stats": stats,
+            "files": [{"filename": f.get("filename"), "status": f.get("status"),
+                       "additions": f.get("additions"), "deletions": f.get("deletions")}
+                      for f in files],
+            "patch": "\n".join(
+                f"--- {f.get('filename')}\n{f.get('patch') or '(no text diff)'}"
+                for f in files[:20])[:60000],
+            "security_flags": flags,
+            "status": status,
+            "screened_at": utc_now(),
+        })
+        log(f"  {status:<10} {sha[:8]} {(commit['subject'] or '')[:60]}")
+
+    log(f"  commits seen:  {seen}")
+    log(f"  reused cache:  {reused}")
+    log(f"  dropped:       {dropped}")
+    for reason, n in sorted(drop_reasons.items(), key=lambda kv: -kv[1]):
+        log(f"      {n:>4}  {reason}")
+    log(f"  quarantined:   {quarantined}")
+    log(f"  clean:         {kept}")
+    log(f"  api calls:     {_api_calls}")
+    save_meta(meta, "upstream", {
+        "seen": seen, "dropped": dropped, "drop_reasons": drop_reasons,
+        "quarantined": quarantined, "clean": kept, "reused": reused,
     })
     return 0
 
@@ -792,14 +1022,40 @@ def related_history(subject, max_lines=8):
     return unique[:max_lines]
 
 
+FORK_TRIAGE_INTRO = [
+    "You are triaging commits found in third-party forks of mRemoteNG, to decide "
+    "whether our own fork (robertpopa22/mRemoteNG, ~1600 commits ahead of upstream) "
+    "should import them.",
+    "",
+    "Our fork already fixed a great deal upstream never did, so the most common correct "
+    "answer is that a change is already covered or no longer applies. Be strict.",
+]
+
+# Unlike a stranger's fork, these are commits from the project we forked - the same
+# people, on the same files, going a different direction. "already_in_our_fork" is
+# rarely the right call here; "conflicts with our own rework" usually is, and a
+# conflicting patch can still be worth REIMPLEMENT for the direction it represents
+# even when applies_cleanly is "rewrite" or "conflict".
+UPSTREAM_TRIAGE_INTRO = [
+    "You are triaging commits from mRemoteNG/mRemoteNG itself - the upstream project "
+    "we forked, not a stranger's fork - to decide whether our fork "
+    "(robertpopa22/mRemoteNG) should pull them in.",
+    "",
+    "Our fork is roughly 1788 commits and 2905 files ahead of upstream, with 216 files "
+    "that upstream also went on to touch independently. Because of that overlap, the "
+    "most common correct answer is usually NOT \"already covered\" - it is \"conflicts "
+    "with our own rework of the same area\". A change can still be worth importing as "
+    "DIRECTION (the idea, or the bug it fixes) even when the literal patch cannot apply; "
+    "use REIMPLEMENT for that rather than REJECT, and applies_cleanly \"conflict\" or "
+    "\"rewrite\" rather than assuming it is already handled.",
+]
+
+
 def build_triage_prompt(batch, issue_titles):
+    intro = UPSTREAM_TRIAGE_INTRO if batch and candidate_kind(batch[0]) == "upstream" \
+        else FORK_TRIAGE_INTRO
     parts = [
-        "You are triaging commits found in third-party forks of mRemoteNG, to decide "
-        "whether our own fork (robertpopa22/mRemoteNG, ~1600 commits ahead of upstream) "
-        "should import them.",
-        "",
-        "Our fork already fixed a great deal upstream never did, so the most common correct "
-        "answer is that a change is already covered or no longer applies. Be strict.",
+        *intro,
         "",
         "Open issues in our tracker:",
         *(f"  {t}" for t in issue_titles),
@@ -866,45 +1122,53 @@ def cmd_triage(args):
     issue_titles = our_open_issue_titles()
     log(f"Triaging {len(pending)} candidates with {args.agent} (batch {args.batch})")
 
-    judged = failed = 0
-    for i in range(0, len(pending), args.batch):
-        chunk = pending[i:i + args.batch]
-        prompt = build_triage_prompt([c for _, c in chunk], issue_titles)
-        verdicts = None
-        for agent in [args.agent] + [a for a in ("codex", "gemini", "claude") if a != args.agent]:
-            verdicts = extract_json_array(agent_run(agent, prompt))
-            if verdicts:
-                break
-            log(f"  ! {agent} returned no usable JSON, trying next agent")
-        if not verdicts:
-            failed += len(chunk)
-            continue
+    # Grouped by kind before batching: fork and upstream commits need different
+    # framing (build_triage_prompt) and a batch must never mix the two prompts.
+    groups = {}
+    for item in pending:
+        groups.setdefault(candidate_kind(item[1]), []).append(item)
 
-        by_sha = {v.get("sha"): v for v in verdicts if isinstance(v, dict)}
-        for path, cand in chunk:
-            verdict = by_sha.get(cand["sha"]) or by_sha.get(cand["sha"][:10])
-            if not verdict:
-                failed += 1
+    judged = failed = 0
+    for kind in sorted(groups):
+        group = groups[kind]
+        for i in range(0, len(group), args.batch):
+            chunk = group[i:i + args.batch]
+            prompt = build_triage_prompt([c for _, c in chunk], issue_titles)
+            verdicts = None
+            for agent in [args.agent] + [a for a in ("codex", "gemini", "claude") if a != args.agent]:
+                verdicts = extract_json_array(agent_run(agent, prompt))
+                if verdicts:
+                    break
+                log(f"  ! {agent} returned no usable JSON, trying next agent")
+            if not verdicts:
+                failed += len(chunk)
                 continue
-            cand["triage"] = {
-                "category": verdict.get("category"),
-                "maps_to_issue": verdict.get("maps_to_issue"),
-                "already_in_our_fork": bool(verdict.get("already_in_our_fork")),
-                "value": int(verdict.get("value") or 0),
-                "effort": int(verdict.get("effort") or 0),
-                "risk": int(verdict.get("risk") or 0),
-                "applies_cleanly": verdict.get("applies_cleanly"),
-                "action": verdict.get("action"),
-                "rationale": verdict.get("rationale"),
-                "agent": agent,
-                "at": utc_now(),
-            }
-            write_json(path, cand)
-            judged += 1
-            log(f"  {verdict.get('action', '?'):<10} v{verdict.get('value')} "
-                f"e{verdict.get('effort')} r{verdict.get('risk')}  "
-                f"{cand['sha'][:8]} {(cand.get('subject') or '')[:48]}")
-        time.sleep(1)
+
+            by_sha = {v.get("sha"): v for v in verdicts if isinstance(v, dict)}
+            for path, cand in chunk:
+                verdict = by_sha.get(cand["sha"]) or by_sha.get(cand["sha"][:10])
+                if not verdict:
+                    failed += 1
+                    continue
+                cand["triage"] = {
+                    "category": verdict.get("category"),
+                    "maps_to_issue": verdict.get("maps_to_issue"),
+                    "already_in_our_fork": bool(verdict.get("already_in_our_fork")),
+                    "value": int(verdict.get("value") or 0),
+                    "effort": int(verdict.get("effort") or 0),
+                    "risk": int(verdict.get("risk") or 0),
+                    "applies_cleanly": verdict.get("applies_cleanly"),
+                    "action": verdict.get("action"),
+                    "rationale": verdict.get("rationale"),
+                    "agent": agent,
+                    "at": utc_now(),
+                }
+                write_json(path, cand)
+                judged += 1
+                log(f"  {verdict.get('action', '?'):<10} v{verdict.get('value')} "
+                    f"e{verdict.get('effort')} r{verdict.get('risk')}  "
+                    f"{cand['sha'][:8]} {(cand.get('subject') or '')[:48]}")
+            time.sleep(1)
 
     log(f"  judged: {judged}   failed: {failed}")
     save_meta(meta, "triage", {"judged": judged, "failed": failed, "agent": args.agent})
@@ -1410,16 +1674,18 @@ TIER_TITLES = {
 }
 
 
-def cmd_report(args):
-    """Rank every judged candidate and write the report plus the import queue."""
-    meta = load_meta()
-    rules = load_rules()
-    exclude = load_exclude()
-    decided = exclude.get("commits", {})
+def _tier_candidates(rules, decided, kind):
+    """Score and bucket every live candidate of one kind into tiers.
 
+    Fork and upstream candidates share the exact same score_candidate and tier
+    thresholds - the source of a commit changes how it gets triaged
+    (build_triage_prompt's framing), never how a triage verdict is scored.
+    """
     tiers = {t: [] for t in TIER_TITLES}
     untriaged = 0
     for _, cand in iter_candidates():
+        if candidate_kind(cand) != kind:
+            continue
         if cand.get("status") == "dropped":
             continue
         if cand["sha"] in decided:
@@ -1433,24 +1699,21 @@ def cmd_report(args):
 
     for tier in tiers:
         tiers[tier].sort(key=lambda c: -c["_score"])
+    return tiers, untriaged
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    report_path = REPORTS_DIR / f"{today}_fork-radar.md"
 
-    lines = [
-        f"# Fork Radar - {today}",
-        "",
-        f"Upstream `{UPSTREAM}` - forks scanned for changes worth importing into `{OUR_FORK}`.",
-        "",
-        "| Tier | Count |",
-        "|---|---|",
-    ]
+def _tier_count_lines(tiers, untriaged):
+    lines = ["| Tier | Count |", "|---|---|"]
     for tier in ("A", "B", "C", "Q", "D"):
         lines.append(f"| {TIER_TITLES[tier]} | {len(tiers[tier])} |")
     if untriaged:
         lines.append(f"| not yet triaged | {untriaged} |")
     lines.append("")
+    return lines
 
+
+def _tier_detail_lines(tiers):
+    lines = []
     for tier in ("A", "B", "Q", "C", "D"):
         if not tiers[tier]:
             continue
@@ -1485,6 +1748,44 @@ def cmd_report(args):
                     lines.append(f"  - `{flag['id']}` ({flag['severity']}) "
                                  f"in `{flag['file']}` - {flag['reason']}")
             lines.append("")
+    return lines
+
+
+def cmd_report(args):
+    """Rank every judged candidate and write the report plus the import queue."""
+    meta = load_meta()
+    rules = load_rules()
+    exclude = load_exclude()
+    decided = exclude.get("commits", {})
+
+    tiers, untriaged = _tier_candidates(rules, decided, "fork")
+    up_tiers, up_untriaged = _tier_candidates(rules, decided, "upstream")
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    report_path = REPORTS_DIR / f"{today}_fork-radar.md"
+
+    lines = [
+        f"# Fork Radar - {today}",
+        "",
+        f"Upstream `{UPSTREAM}` - forks scanned for changes worth importing into `{OUR_FORK}`.",
+        "",
+    ]
+    lines += _tier_count_lines(tiers, untriaged)
+    lines += _tier_detail_lines(tiers)
+
+    # Upstream's own unmerged commits - a second source feeding the same
+    # screen/triage machinery, reported separately and never entered into the
+    # cherry-pick queue below (that queue is fork-only).
+    lines.append(f"# Upstream Radar - {today}")
+    lines.append("")
+    lines.append(f"Commits on `{UPSTREAM}`'s own default branch that `{OUR_FORK}` does not have "
+                 "yet. These are not a stranger's fork: the most common correct verdict is a "
+                 "conflict with our own rework of the same area, not \"already covered\", and a "
+                 "change can be worth taking as direction even when the patch itself cannot apply. "
+                 "Reported for awareness only - nothing here enters the import queue automatically.")
+    lines.append("")
+    lines += _tier_count_lines(up_tiers, up_untriaged)
+    lines += _tier_detail_lines(up_tiers)
 
     lines.append("---")
     lines.append("")
@@ -1549,13 +1850,22 @@ def cmd_report(args):
             queue.append("")
     IMPORT_QUEUE.write_text("\n".join(queue) + "\n", encoding="utf-8")
 
+    log("  fork candidates:")
     for tier in ("A", "B", "C", "Q", "D"):
-        log(f"  {TIER_TITLES[tier]:<52} {len(tiers[tier])}")
+        log(f"    {TIER_TITLES[tier]:<50} {len(tiers[tier])}")
     if untriaged:
-        log(f"  {'not yet triaged':<52} {untriaged}")
+        log(f"    {'not yet triaged':<50} {untriaged}")
+    log("  upstream candidates:")
+    for tier in ("A", "B", "C", "Q", "D"):
+        log(f"    {TIER_TITLES[tier]:<50} {len(up_tiers[tier])}")
+    if up_untriaged:
+        log(f"    {'not yet triaged':<50} {up_untriaged}")
     log(f"  report: {report_path}")
     log(f"  queue:  {IMPORT_QUEUE}")
-    save_meta(meta, "report", {t: len(tiers[t]) for t in tiers})
+    save_meta(meta, "report", {
+        "fork": {t: len(tiers[t]) for t in tiers},
+        "upstream": {t: len(up_tiers[t]) for t in up_tiers},
+    })
     return 0
 
 
@@ -1582,9 +1892,10 @@ def cmd_status(args):
         by_status[f.get("status", "?")] = by_status.get(f.get("status", "?"), 0) + 1
 
     cands = list(iter_candidates())
-    by_cand = {}
+    by_cand = {"fork": {}, "upstream": {}}
     for _, c in cands:
-        by_cand[c.get("status", "?")] = by_cand.get(c.get("status", "?"), 0) + 1
+        bucket = by_cand.setdefault(candidate_kind(c), {})
+        bucket[c.get("status", "?")] = bucket.get(c.get("status", "?"), 0) + 1
 
     log(f"Fork Intelligence v{VERSION}")
     log(f"  upstream: {UPSTREAM}")
@@ -1592,8 +1903,11 @@ def cmd_status(args):
     for k in sorted(by_status):
         log(f"    {k:<18} {by_status[k]}")
     log(f"  candidates: {len(cands)}")
-    for k in sorted(by_cand):
-        log(f"    {k:<18} {by_cand[k]}")
+    for kind in ("fork", "upstream"):
+        counts = by_cand.get(kind, {})
+        log(f"    {kind}: {sum(counts.values())}")
+        for k in sorted(counts):
+            log(f"      {k:<16} {counts[k]}")
     for stage, info in (meta.get("last_run") or {}).items():
         log(f"  last {stage:<9} {info.get('at')}  (api {info.get('api_calls')})")
     return 0
@@ -1627,6 +1941,16 @@ def build_parser():
     p_scr.add_argument("--refresh", action="store_true",
                        help="re-screen commits that already have a candidate file")
     p_scr.set_defaults(func=cmd_screen)
+
+    p_ups = sub.add_parser("upstream",
+                           help="compare against upstream's own default branch and screen it")
+    p_ups.add_argument("--limit", type=int, default=0, help="stop after N clean commits")
+    p_ups.add_argument("--refresh", action="store_true",
+                       help="re-screen commits that already have a candidate file")
+    p_ups.add_argument("--base", default="",
+                       help="override our fork's ref used as the comparison base "
+                            "(default: our fork's registered default branch)")
+    p_ups.set_defaults(func=cmd_upstream)
 
     p_tri = sub.add_parser("triage", help="AI judgement on screened commits")
     p_tri.add_argument("--limit", type=int, default=0, help="stop after N candidates")
