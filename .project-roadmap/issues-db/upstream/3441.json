@@ -1,0 +1,144 @@
+{
+  "number": 3441,
+  "repo": "mRemoteNG/mRemoteNG",
+  "title": "Why the best Remote Desktop Program is DEAD ?",
+  "state": "open",
+  "labels": [
+    "Layer-8-Issue"
+  ],
+  "author": "pralium444",
+  "created_at": "2026-09-08T07:16:26Z",
+  "github_updated_at": "2026-09-15T08:18:23Z",
+  "body_snippet": "Please explain me why this is dead\nIt's the best rdp program",
+  "our_status": "new",
+  "priority": null,
+  "target_release": null,
+  "our_branch": null,
+  "our_pr": null,
+  "iterations": [],
+  "comments": [
+    {
+      "id": "IC_kwDOAAcIMM8AAAABTOlr0Q",
+      "author": "Kvarkas",
+      "date": "2026-09-08T12:44:42Z",
+      "snippet": ":) if you check carefully last commits to curent branch it constantly geting updates, so not sure what you mean \"dead\"?",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABTbrA4w",
+      "author": "fabsenet",
+      "date": "2026-09-09T08:46:28Z",
+      "snippet": "maybe he means something like: why is there no current release? as i see it, the last one was in february this year?",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABTdKBnA",
+      "author": "Kvarkas",
+      "date": "2026-09-09T10:48:10Z",
+      "snippet": "Well its curently a lot of work going on on background to make this happened, all I could say for now is what NB soon will be produced more regulary and Release Candidate should be anounce soon. Thanks",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABT_rq7w",
+      "author": "krwudtke",
+      "date": "2026-09-11T15:32:28Z",
+      "snippet": "I have to agree with the OP. This project feels dead since it has been 7.5 years since an official release and 7 years since a Preview/Beta release. I am actively looking for a replacement.",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABT_8xuQ",
+      "author": "Kvarkas",
+      "date": "2026-09-11T15:55:14Z",
+      "snippet": "Why looking instead of testing new NB release? https://github.com/mRemoteNG/mRemoteNG/releases/tag/20260911-v1.78.2-NB-(3694) 😎",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABUHLDvg",
+      "author": "lars18th",
+      "date": "2026-09-12T08:13:50Z",
+      "snippet": "> Why looking instead of testing new NB release? https://github.com/mRemoteNG/mRemoteNG/releases/tag/20260911-v1.78.2-NB-(3694) \n\nThis NB version has the SAVE functionality enabled?\n",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABUHUzug",
+      "author": "Kvarkas",
+      "date": "2026-09-12T08:46:22Z",
+      "snippet": "Not sure I got you? Можно по русски, что вы имеете в виду? Версия тестовая но навредить ничему не должна, на всякий случай сделайте бекап списка подключений",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABUUK1Lg",
+      "author": "mquan86",
+      "date": "2026-09-14T02:47:01Z",
+      "snippet": "I think the question raise by OP is kind of valid, because there is no stable release for many years and just testing/NB or candidate... That make end user feel the project is dead or no new release.\n\nIn fact, in some of my customer environments, they even not allowed mRemoteNG usage. I guess they have the same impression as OP that the software is abondance and cause security risk, hence block it.\n\nFor me it is the same, I just feel that no new official release announcement, hence I have to kee...",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABUW0DJQ",
+      "author": "Kvarkas",
+      "date": "2026-09-14T08:18:39Z",
+      "snippet": "Axactly because many security concerns are rised (thanks AI tools!) Its delayed to fix before anouncing release",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABUXPIcg",
+      "author": "lars18th",
+      "date": "2026-09-14T08:58:58Z",
+      "snippet": "Hi @Kvarkas ,\n\n> Axactly because many security concerns are rised (thanks AI tools!) Its delayed to fix before anouncing release\n\nThe problem is that you don't share any backlog to see the full list of pending issues to resolve. From our point of view, any new release is far away to wait for it. We prefer one usable beta now than a delayed finished release.\n",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABUd6pRA",
+      "author": "Kvarkas",
+      "date": "2026-09-14T18:10:32Z",
+      "snippet": "Usable demo is ecactly NB, but as its not called stable so people canį use in prod env and what is main dialema... idea about back log I like it, just dont have enoght time to set all from my head to a file 🤯",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABUlT5EA",
+      "author": "lars18th",
+      "date": "2026-09-15T07:12:27Z",
+      "snippet": "Hi @Kvarkas ,\n\nYes, a `demo` is a NB version.\nBut we need a `beta` after _years_ of no new version.\nAnd `beta` is not a `release`.\n\nPlease, consider a new beta in a short time.\n",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABUmCBXA",
+      "author": "Kvarkas",
+      "date": "2026-09-15T08:18:16Z",
+      "snippet": "About versioning just **[CENSORED!] Links to external GitHub repositories are not allowed**",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    }
+  ],
+  "comments_cursor": "2026-09-15T08:18:23Z",
+  "unread_comments": 13,
+  "needs_action": true,
+  "waiting_for_us": true,
+  "last_synced": "2026-09-20T20:37:19Z",
+  "notes": ""
+}

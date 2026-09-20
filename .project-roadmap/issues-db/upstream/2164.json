@@ -8,7 +8,7 @@
   ],
   "author": "strdex",
   "created_at": "2022-02-08T07:50:59Z",
-  "github_updated_at": "2026-02-27T13:13:26Z",
+  "github_updated_at": "2026-09-09T10:45:35Z",
   "body_snippet": "TightVNC  use to a lot of computer insede IT office.  \r\nSupport to tih protocol ?\r\n",
   "our_status": "released",
   "priority": "P3-enhancement",
@@ -62,12 +62,30 @@
       "is_ours": true,
       "analyzed": false,
       "action_needed": false
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABTczTqQ",
+      "author": "ericszimmermann",
+      "date": "2026-09-09T10:16:50Z",
+      "snippet": "I have the currious thing that the color is inverted when I access my tightVNC server (older Version 2.8.85).\nIt is not a value inversion because black is still black and white is white, but blue gets orange and and orange blue.\nLike you turn the colorwheel about 180°.\n\n<img width=\"1022\" height=\"349\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/3ea9464b-fe0f-4e63-ad46-3a4abade1fa6\" />",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDOAAcIMM8AAAABTdILzA",
+      "author": "Kvarkas",
+      "date": "2026-09-09T10:45:35Z",
+      "snippet": "Curently vnc related protocol have some issues, but once fix db access will try to look into this one",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
     }
   ],
-  "comments_cursor": "2026-02-27T13:13:26Z",
-  "unread_comments": 1,
+  "comments_cursor": "2026-09-09T10:45:35Z",
+  "unread_comments": 3,
   "needs_action": true,
-  "waiting_for_us": false,
-  "last_synced": "2026-03-07T07:13:19Z",
+  "waiting_for_us": true,
+  "last_synced": "2026-09-20T20:37:19Z",
   "notes": "AI triage (gemini): Add specific support or improve compatibility with TightVNC's features, extending existing VNC implementation.\nApproach: Investigate TightVNC's unique features (e.g., compression, authentication, encoding) that are not currently supported by mRemoteNG's generic VNC implementation. Implement these features by extending the VNC protocol handler and adding necessary configuration options to ConnectionInfo. Focus on maintaining compatibility with other VNC servers while enabling TightVNC-specific optimizations."
 }

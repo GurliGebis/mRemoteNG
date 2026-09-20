@@ -1,24 +1,41 @@
 {
   "number": 3403,
   "repo": "mRemoteNG/mRemoteNG",
-  "title": "No se muestra pantalla en Windows",
+  "title": "Screen not displaying in Windows",
   "state": "open",
-  "labels": [],
+  "labels": [
+    "Needs User Verification",
+    "RDP",
+    "Need 2 check",
+    "Windows",
+    "1.78.*",
+    "Nightly Build"
+  ],
   "author": "sambu777",
   "created_at": "2026-07-31T17:29:36Z",
-  "github_updated_at": "2026-07-31T17:29:36Z",
-  "body_snippet": "Cuando se inicia sesion en un servidor windows server, se muestra la pantalla negra. Version de MremoteNG 1.78.2 (nightly Build 3405) x64, no se muestra el fondo de pantalla original del servidor.",
+  "github_updated_at": "2026-09-09T17:47:05Z",
+  "body_snippet": "When logging into a Windows server, a black screen is displayed. Version of mRemoteNG 1.78.2 (nightly Build 3405) x64, the server's original wallpaper is not shown.",
   "our_status": "new",
   "priority": null,
   "target_release": null,
   "our_branch": null,
   "our_pr": null,
   "iterations": [],
-  "comments": [],
-  "comments_cursor": "2026-07-31T17:29:36Z",
-  "unread_comments": 0,
+  "comments": [
+    {
+      "id": "IC_kwDOAAcIMM8AAAABTih9OA",
+      "author": "Kvarkas",
+      "date": "2026-09-09T17:45:24Z",
+      "snippet": "could you provide Windows Server verson and build number so i could test it",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    }
+  ],
+  "comments_cursor": "2026-09-09T17:47:05Z",
+  "unread_comments": 1,
   "needs_action": true,
   "waiting_for_us": true,
-  "last_synced": "2026-09-02T12:58:40Z",
+  "last_synced": "2026-09-20T20:37:19Z",
   "notes": ""
 }

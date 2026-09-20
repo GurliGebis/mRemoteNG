@@ -2,7 +2,7 @@
   "number": 389,
   "repo": "mRemoteNG/mRemoteNG",
   "title": "option to hide the saved putty sessions",
-  "state": "open",
+  "state": "closed",
   "labels": [
     "Enhancement",
     "UI/UX",
@@ -105,7 +105,7 @@
   ],
   "comments_cursor": "2026-02-26T14:10:59Z",
   "unread_comments": 6,
-  "needs_action": true,
+  "needs_action": false,
   "waiting_for_us": false,
   "last_synced": "2026-03-07T07:13:19Z",
   "notes": "AI triage: Valid enhancement request to hide PuTTY saved sessions from the connection tree, with community support (+1) and clear use case since mRemoteNG users manage connections natively\nApproach: Add a boolean setting (e.g. ShowPuttySavedSessions, default true) in Options > Connections page. When false, skip loading/displaying PuTTY saved sessions in the connection tree by short-circuiting PuttySessionsManager refresh. Persist the setting in the existing settings infrastructure."

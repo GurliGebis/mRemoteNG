@@ -2,7 +2,7 @@
   "number": 343,
   "repo": "mRemoteNG/mRemoteNG",
   "title": "[Request] Minimize tabs on connect",
-  "state": "open",
+  "state": "closed",
   "labels": [
     "Enhancement",
     "UI/UX"
@@ -58,7 +58,7 @@
   ],
   "comments_cursor": "2026-02-26T14:10:56Z",
   "unread_comments": 1,
-  "needs_action": true,
+  "needs_action": false,
   "waiting_for_us": false,
   "last_synced": "2026-03-07T07:13:19Z",
   "notes": "AI triage: The issue title suggests minimizing tabs on connect but the body is empty and the only comment is a maintainer asking for clarification, indicating the request is unclear and no reporter response was provided.\nApproach: Once clarified, likely add an option to auto-hide or minimize the connection tree/tabs panel when a connection is opened."

@@ -6,7 +6,7 @@
   "labels": [],
   "author": "bruste77",
   "created_at": "2026-09-16T12:30:11Z",
-  "github_updated_at": "2026-09-16T12:30:11Z",
+  "github_updated_at": "2026-09-18T07:38:25Z",
   "body_snippet": "# Host reachability status icon shows \"Reachable\" for offline/unreachable hosts (false positives behind Zscaler/ZTNA), plus related bugs found and fixed along the way\n\n## Summary\n\nThe connection tree (and a separate button in the Config panel) show a reachability icon\n(online/offline) per connection, computed by `mRemoteNG/Tools/HostStatusMonitor.cs` (see issue\n#1109). The original implementation determined reachability with a single, weak check: open a raw\nTCP connection to the host's port and ...",
   "our_status": "needs_info",
   "priority": null,
@@ -25,11 +25,39 @@
       "comment_posted": false
     }
   ],
-  "comments": [],
-  "comments_cursor": "2026-09-16T12:30:11Z",
-  "unread_comments": 0,
+  "comments": [
+    {
+      "id": "IC_kwDORKxwDc8AAAABVQTZcg",
+      "author": "robertpopa22",
+      "date": "2026-09-17T21:17:39Z",
+      "snippet": "Thank you — this is a good report, and the two things it can be checked against are both true.\n\n`HostStatusMonitor.IsReachableAsync` really is a bare `TcpClient.ConnectAsync` with no application-layer verification. And your point 3 is real too: `ConfigWindow` carries a **second, independent** reachability check of its own, also a bare TCP connect, so the tree and the Config panel can disagree about the same host for no good reason.\n\nYour mechanism is plausible as stated. A ZTNA or WAN-optimisati...",
+      "is_ours": true,
+      "analyzed": false,
+      "action_needed": false
+    },
+    {
+      "id": "IC_kwDORKxwDc8AAAABVVfhwg",
+      "author": "bruste77",
+      "date": "2026-09-18T07:34:16Z",
+      "snippet": "In my case the remote machines are powered off, but mremote shows them as reachable (green icon).\nI attache the patch for the icon cache, it was done on an pretty old nightly\n\n[icon-cache-fix.patch](https://github.com/user-attachments/files/32370683/icon-cache-fix.patch)",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    },
+    {
+      "id": "IC_kwDORKxwDc8AAAABVViCWQ",
+      "author": "bruste77",
+      "date": "2026-09-18T07:38:25Z",
+      "snippet": "I agree that security tool can treat the connection attempt as scan, maybe you can add only the option to use icmp instead of the tcp connect, in my case also icmp solve the issue",
+      "is_ours": false,
+      "analyzed": false,
+      "action_needed": true
+    }
+  ],
+  "comments_cursor": "2026-09-18T07:38:25Z",
+  "unread_comments": 2,
   "needs_action": true,
   "waiting_for_us": true,
-  "last_synced": "2026-09-17T21:17:49Z",
+  "last_synced": "2026-09-20T20:37:19Z",
   "notes": "Both premises verified in source: HostStatusMonitor.IsReachableAsync is a bare TCP connect, and ConfigWindow has a second independent one. No patch attached; asked for PR + whether host is powered off vs port closed."
 }

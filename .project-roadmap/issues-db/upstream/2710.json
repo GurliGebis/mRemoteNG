@@ -2,7 +2,7 @@
   "number": 2710,
   "repo": "mRemoteNG/mRemoteNG",
   "title": "Добавить не достающие страницы",
-  "state": "open",
+  "state": "closed",
   "labels": [
     "UI/UX",
     "1.78.*",
@@ -41,7 +41,7 @@
   "comments_cursor": "2026-02-26T13:49:21Z",
   "unread_comments": 0,
   "needs_action": false,
-  "waiting_for_us": true,
+  "waiting_for_us": false,
   "last_synced": "2026-03-07T07:13:19Z",
   "notes": "Feature: add missing pages (About, carousel). UI translation enhancement (Russian)."
 }

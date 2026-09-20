@@ -2,7 +2,7 @@
   "number": 3261,
   "repo": "mRemoteNG/mRemoteNG",
   "title": "can't click the correct element",
-  "state": "open",
+  "state": "closed",
   "labels": [
     "Bug",
     "HighDPI",
@@ -22,8 +22,8 @@
   "comments": [],
   "comments_cursor": "2026-04-13T11:09:49Z",
   "unread_comments": 0,
-  "needs_action": true,
-  "waiting_for_us": true,
+  "needs_action": false,
+  "waiting_for_us": false,
   "last_synced": "2026-05-25T14:28:55Z",
   "notes": ""
 }
