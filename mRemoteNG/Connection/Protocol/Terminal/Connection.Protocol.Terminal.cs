@@ -123,16 +123,13 @@ namespace mRemoteNG.Connection.Protocol.Terminal
             // Deliberately do NOT echo the offending value: it is attacker-controlled and, in the
             // invalid case, may contain control characters/newlines that would be written verbatim into
             // logs and UI messages (log forging / message spoofing).
-            // Stricter than upstream on the hostname alone: '@' and '/' are never part of a host
-            // name, but ssh reads both - "user@host" splits on the last '@', and "ssh://u@h:p" is a
-            // URI whose user, host and port silently replace what the profile shows. Neither runs a
-            // command, but a connections file should not be able to make ssh go somewhere other
-            // than the field the user can see. IPv6 brackets contain neither character.
-            if (!IsSafeSshToken(hostname) || hostname.Contains('@') || hostname.Contains('/'))
-                throw new ArgumentException("Refusing to start SSH session: the hostname contains characters that are not allowed.");
+            // Stricter than upstream on the hostname alone ('@' and '/' refused too); the rules and
+            // the reason for each live in ConsoleArgument, shared with OpenSSH and WSL.
+            if (!ConsoleArgument.IsHost(hostname))
+                throw ConsoleArgument.Refuse("SSH", "hostname");
 
-            if (username.Length > 0 && !IsSafeSshToken(username))
-                throw new ArgumentException("Refusing to start SSH session: the username contains characters that are not allowed.");
+            if (username.Length > 0 && !ConsoleArgument.IsSingleToken(username))
+                throw ConsoleArgument.Refuse("SSH", "username");
 
             string args = "";
 
@@ -145,31 +142,6 @@ namespace mRemoteNG.Connection.Protocol.Terminal
                 args += hostname;
 
             return args.Trim();
-        }
-
-        /// <summary>
-        /// Returns true only for values that are safe to place on the ssh.exe command line as a single
-        /// token: non-empty, no whitespace or control characters, no double quotes, and not starting
-        /// with '-' (which ssh would treat as an option switch). Double quotes are rejected because
-        /// Windows argument parsing (CommandLineToArgvW) strips them, so a value such as
-        /// "-oProxyCommand=..." does not literally start with '-' here yet reaches ssh.exe as an argv
-        /// token that does - re-enabling option injection.
-        /// </summary>
-        private static bool IsSafeSshToken(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return false;
-
-            if (value[0] == '-')
-                return false;
-
-            foreach (char c in value)
-            {
-                if (char.IsWhiteSpace(c) || char.IsControl(c) || c == '"')
-                    return false;
-            }
-
-            return true;
         }
 
         private static string? FindSshExe()

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.IO;
 using System.Runtime.Versioning;
@@ -124,11 +124,32 @@ namespace mRemoteNG.Connection.Protocol.SSH
             return null;
         }
 
-        private string BuildSshArguments()
+        private string BuildSshArguments() =>
+            BuildSshArguments(_connectionInfo.Hostname, _connectionInfo.Username, _connectionInfo.Port,
+                              _connectionInfo.SSHOptions, _connectionInfo.PrivateKeyPath);
+
+        /// <summary>
+        /// ssh.exe is launched directly, so nothing here can run a shell command; what a
+        /// connections file could still do is make a field arrive as an extra argument or as an
+        /// option (a hostname of "-oProxyCommand=..." runs a command through ssh itself). Hostname,
+        /// username and the key path are therefore validated and refused, never sanitised - the
+        /// same rules as the Terminal protocol, in ConsoleArgument.
+        ///
+        /// SSHOptions is passed through as it always has been: that field exists to carry extra
+        /// ssh options and is the user's own. A shared connections file can set it too, which is a
+        /// property of the feature rather than of this method, and is recorded as such.
+        /// </summary>
+        private static string BuildSshArguments(string? rawHostname, string? rawUsername, int port,
+                                                string? rawSshOptions, string? rawKeyPath)
         {
-            string hostname = _connectionInfo.Hostname.Trim();
-            string username = _connectionInfo.Username;
-            int port = _connectionInfo.Port;
+            string hostname = (rawHostname ?? string.Empty).Trim();
+            string username = (rawUsername ?? string.Empty).Trim();
+
+            if (!ConsoleArgument.IsHost(hostname))
+                throw ConsoleArgument.Refuse("OpenSSH", "hostname");
+
+            if (username.Length > 0 && !ConsoleArgument.IsSingleToken(username))
+                throw ConsoleArgument.Refuse("OpenSSH", "username");
 
             string args = "";
 
@@ -139,16 +160,20 @@ namespace mRemoteNG.Connection.Protocol.SSH
             }
 
             // Add SSH options (extra flags like -o StrictHostKeyChecking=no)
-            string sshOptions = _connectionInfo.SSHOptions?.Trim() ?? string.Empty;
+            string sshOptions = rawSshOptions?.Trim() ?? string.Empty;
             if (!string.IsNullOrEmpty(sshOptions))
             {
                 args += $"{sshOptions} ";
             }
 
             // Add private key if specified; otherwise try auto-discovery of default keys
-            string keyPath = _connectionInfo.PrivateKeyPath?.Trim() ?? string.Empty;
+            string keyPath = rawKeyPath?.Trim() ?? string.Empty;
             if (!string.IsNullOrEmpty(keyPath))
             {
+                // Placed inside quotes, so the one character that cannot be in it is the quote.
+                if (!ConsoleArgument.IsQuotablePath(keyPath))
+                    throw ConsoleArgument.Refuse("OpenSSH", "private key path");
+
                 // Convert PuTTY .ppk to OpenSSH format hint — user should use OpenSSH-format keys
                 args += $"-i \"{keyPath}\" ";
             }

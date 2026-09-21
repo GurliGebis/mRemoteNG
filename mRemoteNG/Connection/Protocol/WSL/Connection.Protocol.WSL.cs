@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.IO;
 using System.Runtime.Versioning;
@@ -88,25 +88,37 @@ namespace mRemoteNG.Connection.Protocol.WSL
             }
         }
 
-        private string BuildWslArguments()
+        private string BuildWslArguments() =>
+            BuildWslArguments(_connectionInfo.Hostname, _connectionInfo.Username);
+
+        /// <summary>
+        /// wsl.exe is launched directly, so no shell is involved; but "-d name" and "-u name" are
+        /// each a switch followed by one argument, and wsl.exe itself can be told to run a command
+        /// ("-- cmd", "-e cmd"). A distribution or user name containing whitespace, or starting
+        /// with '-', would become further wsl.exe arguments. Both are validated and refused with
+        /// the same rules as the SSH protocols (ConsoleArgument). An empty or "localhost" hostname
+        /// means the default distribution, exactly as before.
+        /// </summary>
+        private static string BuildWslArguments(string? rawHostname, string? rawUsername)
         {
             string arguments = "";
 
-            // If a hostname is specified, treat it as a distribution name
-            if (!string.IsNullOrEmpty(_connectionInfo.Hostname))
+            string hostname = (rawHostname ?? string.Empty).Trim();
+            if (hostname.Length > 0 && !hostname.Equals("localhost", StringComparison.OrdinalIgnoreCase))
             {
-                string hostname = _connectionInfo.Hostname.Trim();
-                // Check if it's not localhost (WSL doesn't use localhost as a distribution name)
-                if (!hostname.Equals("localhost", StringComparison.OrdinalIgnoreCase))
-                {
-                    arguments = $"-d {hostname}";
-                }
+                if (!ConsoleArgument.IsSingleToken(hostname))
+                    throw ConsoleArgument.Refuse("WSL", "distribution name");
+
+                arguments = $"-d {hostname}";
             }
 
-            // If username is specified, we can try to use it
-            if (!string.IsNullOrEmpty(_connectionInfo.Username))
+            string username = (rawUsername ?? string.Empty).Trim();
+            if (username.Length > 0)
             {
-                arguments += $" -u {_connectionInfo.Username}";
+                if (!ConsoleArgument.IsSingleToken(username))
+                    throw ConsoleArgument.Refuse("WSL", "username");
+
+                arguments += $" -u {username}";
             }
 
             return arguments.Trim();
