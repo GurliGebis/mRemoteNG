@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows.Forms;
 using mRemoteNG.App;
@@ -96,7 +96,13 @@ namespace mRemoteNG.UI.Forms.OptionsPages
 
             Properties.OptionsAdvancedPage.Default.EnableConnectionLogging = chkConnectionLogging.Checked;
             Properties.OptionsAdvancedPage.Default.ShowPortScan = chkShowPortScan.Checked;
-            Properties.OptionsAdvancedPage.Default.ShowPuttySavedSessions = chkShowPuttySavedSessions.Checked;
+            if (Properties.OptionsAdvancedPage.Default.ShowPuttySavedSessions != chkShowPuttySavedSessions.Checked)
+            {
+                Properties.OptionsAdvancedPage.Default.ShowPuttySavedSessions = chkShowPuttySavedSessions.Checked;
+                PuttySessionsVisibility.Apply(Runtime.ConnectionsService.ConnectionTreeModel,
+                                              PuttySessionsManager.Instance.RootPuttySessionsNodes,
+                                              chkShowPuttySavedSessions.Checked);
+            }
         }
 
         #endregion

@@ -420,8 +420,11 @@ namespace mRemoteNG.Connection
 
             if (!import)
             {
+                // The sessions are always loaded; whether their roots appear in the tree is the
+                // user's call (#389). The option did nothing until this read was added.
                 _puttySessionsManager.AddSessions();
-                newConnectionTreeModel.RootNodes.AddRange(_puttySessionsManager.RootPuttySessionsNodes);
+                if (Properties.OptionsAdvancedPage.Default.ShowPuttySavedSessions)
+                    newConnectionTreeModel.RootNodes.AddRange(_puttySessionsManager.RootPuttySessionsNodes);
             }
             
             // Set Filename on root nodes if not set
