@@ -104,13 +104,20 @@ namespace mRemoteNG.UI
             AddIfMissing(BuildConnectionIconName(connection.Icon, false, true), CreateTemplateIcon(image));
             AddIfMissing(BuildConnectionIconNameReplace(connection.Icon), CreateReplaceIcon());
 
-            // Host status variants — generate both On and Off so transitions are just lookups
+            // Host status variants — generate both On and Off so transitions are just lookups.
+            // The connected ("Play") base needs them too: a connection with an open tab asks for
+            // Connection_X_Play_Off, and a key nobody ever added silently paints no badge at all,
+            // which reads as "fine" for a host that is actually down (#193).
             if (showHostStatus)
             {
                 AddIfMissing(BuildConnectionIconName(connection.Icon, false, false, HostReachabilityStatus.Reachable),
                     OverlayBottomRight(image, Properties.Resources.HostStatus_On));
                 AddIfMissing(BuildConnectionIconName(connection.Icon, false, false, HostReachabilityStatus.Unreachable),
                     OverlayBottomRight(image, Properties.Resources.HostStatus_Off));
+                AddIfMissing(BuildConnectionIconName(connection.Icon, true, false, HostReachabilityStatus.Reachable),
+                    OverlayBottomRight(Overlay(image, Properties.Resources.ConnectedOverlay), Properties.Resources.HostStatus_On));
+                AddIfMissing(BuildConnectionIconName(connection.Icon, true, false, HostReachabilityStatus.Unreachable),
+                    OverlayBottomRight(Overlay(image, Properties.Resources.ConnectedOverlay), Properties.Resources.HostStatus_Off));
             }
 
             return name;
@@ -153,9 +160,12 @@ namespace mRemoteNG.UI
             return result;
         }
 
-        private static Bitmap OverlayBottomRight(Icon background, Image badge)
+        private static Bitmap OverlayBottomRight(Icon background, Image badge) =>
+            OverlayBottomRight(background.ToBitmap(), badge);
+
+        private static Bitmap OverlayBottomRight(Image background, Image badge)
         {
-            Bitmap result = new(background.ToBitmap(), new Size(16, 16));
+            Bitmap result = new(background, new Size(16, 16));
             using (Graphics gr = Graphics.FromImage(result))
             {
                 int badgeSize = 8;
