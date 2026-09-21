@@ -61,6 +61,7 @@ namespace mRemoteNG.UI.Forms.OptionsPages
             chkDefaultInheritance = new MrngCheckBox();
             chkDisableTreeDragAndDrop = new MrngCheckBox();
             chkShowHostStatus = new MrngCheckBox();
+            chkRequireIcmpEchoForHostStatus = new MrngCheckBox();
             pnlOptions = new System.Windows.Forms.Panel();
             lblRegistrySettingsUsedInfo = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)numRDPConTimeout).BeginInit();
@@ -378,15 +379,27 @@ namespace mRemoteNG.UI.Forms.OptionsPages
             chkShowHostStatus.Text = "Show host reachability status in connection tree";
             chkShowHostStatus.UseVisualStyleBackColor = true;
             //
+            // chkRequireIcmpEchoForHostStatus
+            //
+            chkRequireIcmpEchoForHostStatus._mice = MrngCheckBox.MouseState.OUT;
+            chkRequireIcmpEchoForHostStatus.AutoSize = true;
+            chkRequireIcmpEchoForHostStatus.Font = new System.Drawing.Font("Segoe UI", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            chkRequireIcmpEchoForHostStatus.Location = new System.Drawing.Point(24, 303);
+            chkRequireIcmpEchoForHostStatus.Name = "chkRequireIcmpEchoForHostStatus";
+            chkRequireIcmpEchoForHostStatus.Size = new System.Drawing.Size(450, 17);
+            chkRequireIcmpEchoForHostStatus.TabIndex = 17;
+            chkRequireIcmpEchoForHostStatus.Text = "Host counts as reachable only if it also answers a ping (ICMP echo)";
+            chkRequireIcmpEchoForHostStatus.UseVisualStyleBackColor = true;
+            //
             // chkSlowClickRename
             //
             chkSlowClickRename._mice = MrngCheckBox.MouseState.OUT;
             chkSlowClickRename.AutoSize = true;
             chkSlowClickRename.Font = new System.Drawing.Font("Segoe UI", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            chkSlowClickRename.Location = new System.Drawing.Point(6, 303);
+            chkSlowClickRename.Location = new System.Drawing.Point(6, 326);
             chkSlowClickRename.Name = "chkSlowClickRename";
             chkSlowClickRename.Size = new System.Drawing.Size(290, 17);
-            chkSlowClickRename.TabIndex = 17;
+            chkSlowClickRename.TabIndex = 18;
             chkSlowClickRename.Text = "Rename items using slow double-click (Explorer style)";
             chkSlowClickRename.UseVisualStyleBackColor = true;
             //
@@ -398,6 +411,7 @@ namespace mRemoteNG.UI.Forms.OptionsPages
             pnlOptions.Controls.Add(chkWatchConnectionFile);
             pnlOptions.Controls.Add(chkDoubleClickOpensNewConnection);
             pnlOptions.Controls.Add(chkShowHostStatus);
+            pnlOptions.Controls.Add(chkRequireIcmpEchoForHostStatus);
             pnlOptions.Controls.Add(chkDisableTreeDragAndDrop);
             pnlOptions.Controls.Add(chkDefaultInheritance);
             pnlOptions.Controls.Add(chkSingleClickOnOpenedConnectionSwitchesToIt);
@@ -409,7 +423,7 @@ namespace mRemoteNG.UI.Forms.OptionsPages
             pnlOptions.Dock = System.Windows.Forms.DockStyle.Top;
             pnlOptions.Location = new System.Drawing.Point(0, 30);
             pnlOptions.Name = "pnlOptions";
-            pnlOptions.Size = new System.Drawing.Size(610, 326);
+            pnlOptions.Size = new System.Drawing.Size(610, 349);
             pnlOptions.TabIndex = 12;
             // 
             // lblRegistrySettingsUsedInfo
@@ -473,6 +487,7 @@ namespace mRemoteNG.UI.Forms.OptionsPages
         private MrngCheckBox chkDefaultInheritance;
         private MrngCheckBox chkDisableTreeDragAndDrop;
         private MrngCheckBox chkShowHostStatus;
+        private MrngCheckBox chkRequireIcmpEchoForHostStatus;
         internal System.Windows.Forms.Panel pnlOptions;
         internal System.Windows.Forms.Label lblRegistrySettingsUsedInfo;
     }

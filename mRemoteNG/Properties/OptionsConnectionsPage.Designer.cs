@@ -97,6 +97,18 @@ namespace mRemoteNG.Properties {
 
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool RequireIcmpEchoForHostStatus {
+            get {
+                return ((bool)(this["RequireIcmpEchoForHostStatus"]));
+            }
+            set {
+                this["RequireIcmpEchoForHostStatus"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("")]
         public string ResolvedConnectionFilePath {
             get {

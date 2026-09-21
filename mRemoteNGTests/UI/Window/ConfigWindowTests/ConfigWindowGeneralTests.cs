@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Reflection;
 using System.Threading;
 using mRemoteNG.Connection;
 using mRemoteNG.Connection.Protocol;
@@ -123,43 +121,6 @@ namespace mRemoteNGTests.UI.Window.ConfigWindowTests
 
 			Assert.That(_configWindow.CanShowInheritance, Is.EqualTo(shouldBeAvailable));
 		}
-
-        [Test]
-        public void IsHostReachable_ReturnsTrue_WhenPortIsOpen()
-        {
-            using System.Net.Sockets.TcpListener listener = new(IPAddress.Loopback, 0);
-            listener.Start();
-            int port = ((IPEndPoint)listener.LocalEndpoint).Port;
-
-            bool isHostReachable = InvokeIsHostReachable("127.0.0.1", port, 500);
-
-            Assert.That(isHostReachable, Is.True);
-        }
-
-        [Test]
-        public void IsHostReachable_ReturnsFalse_WhenPortIsClosed()
-        {
-            using System.Net.Sockets.Socket reservedSocket = new(
-                System.Net.Sockets.AddressFamily.InterNetwork,
-                System.Net.Sockets.SocketType.Stream,
-                System.Net.Sockets.ProtocolType.Tcp);
-            reservedSocket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-            int port = ((IPEndPoint)reservedSocket.LocalEndPoint!).Port;
-
-            bool isHostReachable = InvokeIsHostReachable("127.0.0.1", port, 200);
-
-            Assert.That(isHostReachable, Is.False);
-        }
-
-        private static bool InvokeIsHostReachable(string hostname, int port, int timeoutMilliseconds)
-        {
-            MethodInfo? isHostReachableMethod = typeof(ConfigWindow).GetMethod(
-                "IsHostReachable",
-                BindingFlags.NonPublic | BindingFlags.Static);
-
-            Assert.That(isHostReachableMethod, Is.Not.Null);
-            return (bool)isHostReachableMethod!.Invoke(null, new object[] { hostname, port, timeoutMilliseconds })!;
-        }
 
         private static List<TestCaseData> ConnectionInfoGeneralTestCases()
         {

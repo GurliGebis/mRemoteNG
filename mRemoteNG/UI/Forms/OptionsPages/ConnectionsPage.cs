@@ -141,6 +141,7 @@ namespace mRemoteNG.UI.Forms.OptionsPages
             chkDefaultInheritance.Checked = Settings.Default.InhDefaultEverythingInherited;
             chkDisableTreeDragAndDrop.Checked = Settings.Default.DisableTreeDragAndDrop;
             chkShowHostStatus.Checked = Properties.OptionsConnectionsPage.Default.ShowHostStatus;
+            chkRequireIcmpEchoForHostStatus.Checked = Properties.OptionsConnectionsPage.Default.RequireIcmpEchoForHostStatus;
 
             numRdpReconnectionCount.Value = Convert.ToDecimal(Settings.Default.RdpReconnectionCount);
             numRDPConTimeout.Value = Convert.ToDecimal(Settings.Default.ConRDPOverallConnectionTimeout);
@@ -199,6 +200,7 @@ namespace mRemoteNG.UI.Forms.OptionsPages
             Properties.Settings.Default.InhDefaultEverythingInherited = chkDefaultInheritance.Checked;
             Properties.Settings.Default.DisableTreeDragAndDrop = chkDisableTreeDragAndDrop.Checked;
             Properties.OptionsConnectionsPage.Default.ShowHostStatus = chkShowHostStatus.Checked;
+            Properties.OptionsConnectionsPage.Default.RequireIcmpEchoForHostStatus = chkRequireIcmpEchoForHostStatus.Checked;
             Runtime.StartHostStatusMonitorIfEnabled();
 
             Properties.Settings.Default.RdpReconnectionCount = (int)numRdpReconnectionCount.Value;

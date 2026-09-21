@@ -1,10 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
 using System.Windows.Forms;
@@ -14,6 +13,7 @@ using mRemoteNG.Container;
 using mRemoteNG.Messages;
 using mRemoteNG.Properties;
 using mRemoteNG.Themes;
+using mRemoteNG.Tools;
 using mRemoteNG.Tree.Root;
 using mRemoteNG.UI.Controls.ConnectionInfoPropertyGrid;
 using mRemoteNG.UI.Forms;
@@ -893,23 +893,6 @@ namespace mRemoteNG.UI.Window
         private Thread? _pThread;
         private const int HostStatusCheckTimeoutMilliseconds = 1000;
 
-        private static bool IsHostReachable(string hostName, int port, int timeoutMilliseconds)
-        {
-            if (string.IsNullOrWhiteSpace(hostName) || port <= 0)
-                return false;
-
-            try
-            {
-                using TcpClient tcpClient = new();
-                var connectTask = tcpClient.ConnectAsync(hostName, port);
-                return connectTask.Wait(timeoutMilliseconds) && tcpClient.Connected;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-        }
-
         private void CheckHostAlive(object connectionInfo)
         {
             if (connectionInfo is not ConnectionInfo info)
@@ -919,10 +902,15 @@ namespace mRemoteNG.UI.Window
             }
 
             int portToCheck = info.Port == 0 ? info.GetDefaultPort() : info.Port;
-            bool isHostReachable = IsHostReachable(
-                info.Hostname,
-                portToCheck,
-                HostStatusCheckTimeoutMilliseconds);
+
+            // Same verdict as the tree badge, by construction: this button used to carry its own
+            // bare TCP connect and could disagree with the tree about the same host (#193). This
+            // runs on a dedicated thread, so blocking on the probe is fine.
+            bool isHostReachable = HostReachabilityProbe
+                .IsReachableAsync(info.Hostname, portToCheck, HostStatusCheckTimeoutMilliseconds,
+                                  OptionsConnectionsPage.Default.RequireIcmpEchoForHostStatus,
+                                  CancellationToken.None)
+                .GetAwaiter().GetResult();
 
             if (string.Equals(_btnHostStatus.Tag as string, "checking", StringComparison.Ordinal))
             {

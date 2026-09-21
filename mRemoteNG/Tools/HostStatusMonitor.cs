@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Linq;
-using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 using mRemoteNG.Connection;
+using mRemoteNG.Properties;
 using mRemoteNG.Tree;
 
 namespace mRemoteNG.Tools
@@ -36,6 +36,13 @@ namespace mRemoteNG.Tools
 
         /// <summary>Delay between successive host checks to avoid network bursts (default 50 ms).</summary>
         public int StaggerDelayMilliseconds { get; set; } = 50;
+
+        /// <summary>
+        /// Whether a host must also answer an ICMP echo to count as reachable. Null follows the
+        /// Options > Connections setting on every cycle, so a change there takes effect on the
+        /// next scan without restarting the monitor; a test sets it explicitly.
+        /// </summary>
+        public bool? RequireIcmpEcho { get; set; }
 
         public HostStatusMonitor(ConnectionTreeModel model)
         {
@@ -92,13 +99,21 @@ namespace mRemoteNG.Tools
                          && !string.IsNullOrWhiteSpace(c.Hostname))
                 .ToList();
 
+            bool requireIcmpEcho = RequireIcmpEcho ?? OptionsConnectionsPage.Default.RequireIcmpEchoForHostStatus;
+
             foreach (var connection in connections)
             {
                 if (ct.IsCancellationRequested) break;
 
                 int port = connection.Port > 0 ? connection.Port : connection.GetDefaultPort();
-                bool reachable = await IsReachableAsync(connection.Hostname, port, CheckTimeoutMilliseconds, ct)
+                bool reachable = await HostReachabilityProbe
+                    .IsReachableAsync(connection.Hostname, port, CheckTimeoutMilliseconds, requireIcmpEcho, ct)
                     .ConfigureAwait(false);
+
+                // The probe answers false for a cancelled connect as well as a refused one. A stop
+                // that lands mid-probe - every Options > Connections save restarts this monitor -
+                // must not be written down as the host being unreachable.
+                if (ct.IsCancellationRequested) break;
 
                 connection.HostReachabilityStatus = reachable
                     ? HostReachabilityStatus.Reachable
@@ -109,25 +124,6 @@ namespace mRemoteNG.Tools
                     try { await Task.Delay(StaggerDelayMilliseconds, ct).ConfigureAwait(false); }
                     catch (OperationCanceledException) { break; }
                 }
-            }
-        }
-
-        private static async Task<bool> IsReachableAsync(string hostname, int port, int timeoutMs, CancellationToken ct)
-        {
-            if (string.IsNullOrWhiteSpace(hostname) || port <= 0)
-                return false;
-
-            try
-            {
-                using var tcpClient = new TcpClient();
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                timeoutCts.CancelAfter(timeoutMs);
-                await tcpClient.ConnectAsync(hostname, port, timeoutCts.Token).ConfigureAwait(false);
-                return true;
-            }
-            catch
-            {
-                return false;
             }
         }
     }
