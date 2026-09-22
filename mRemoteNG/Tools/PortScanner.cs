@@ -16,7 +16,7 @@ using mRemoteNG.Resources.Language;
 namespace mRemoteNG.Tools
 {
     [SupportedOSPlatform("windows")]
-    public class PortScanner
+    public class PortScanner : IDisposable
     {
         private readonly List<IPAddress> _ipAddresses = [];
         private readonly List<int> _ports = [];
@@ -134,6 +134,10 @@ namespace mRemoteNG.Tools
 
         public void StartScan()
         {
+            // A scanner can be started more than once; the previous source is done with either
+            // way. Disposing it here, and in Dispose, is what keeps SonarCloud's S2930 quiet - and
+            // more to the point what keeps a source per scan from being leaked.
+            _cancellation?.Dispose();
             _cancellation = new CancellationTokenSource();
 
             // Fire and forget: the whole scan is async and internally bounded, so it no longer needs
@@ -146,6 +150,16 @@ namespace mRemoteNG.Tools
             // Cancels the pings AND the in-flight TCP connects promptly, unlike the old code which
             // could only cancel pings and left blocking socket connects running.
             _cancellation?.Cancel();
+        }
+
+        public void Dispose()
+        {
+            // Cancel first so an in-flight scan winds down on a live token, then release the
+            // source. The token the scan holds keeps answering IsCancellationRequested after this.
+            _cancellation?.Cancel();
+            _cancellation?.Dispose();
+            _cancellation = null;
+            GC.SuppressFinalize(this);
         }
 
         public static bool IsPortOpen(string hostname, string port)

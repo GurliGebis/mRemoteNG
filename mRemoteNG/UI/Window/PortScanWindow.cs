@@ -28,6 +28,12 @@ namespace mRemoteNG.UI.Window
         {
             InitializeComponent();
             _scanResultsTimer.Tick += ScanResultsTimer_Tick;
+            // The scanner and the timer are owned here, not by the designer's container.
+            Disposed += (_, _) =>
+            {
+                _portScanner?.Dispose();
+                _scanResultsTimer.Dispose();
+            };
             Icon = Resources.ImageConverter.GetImageAsIcon(Properties.Resources.SearchAndApps_16x);
             WindowType = WindowType.PortScan;
             DockPnl = new DockContent();
@@ -198,6 +204,7 @@ namespace mRemoteNG.UI.Window
                 return;
             }
 
+            _portScanner?.Dispose();
             _portScanner = scanner;
             _portScanner.BeginHostScan += PortScanner_BeginHostScan;
             _portScanner.HostScanned += PortScanner_HostScanned;
