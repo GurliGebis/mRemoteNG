@@ -8,12 +8,23 @@
   "created_at": "2026-09-21T08:24:10Z",
   "github_updated_at": "2026-09-21T11:48:45Z",
   "body_snippet": "Hi,\n\nI would like to report an issue with retrieving configurations from the database. Currently, regardless of which computer we use, we encounter the same error.\n\nTo rule out a compatibility issue between different software versions and the existing database, I even created a brand-new database. However, the problem persists, which suggests that the database itself is not the root cause.\n\nLogs from Portable version, but the same is on the \"normal\" version.\n\n**Object reference not set to an ins...",
-  "our_status": "new",
-  "priority": null,
+  "our_status": "triaged",
+  "priority": "P4-debt",
   "target_release": null,
   "our_branch": null,
   "our_pr": null,
-  "iterations": [],
+  "iterations": [
+    {
+      "seq": 1,
+      "date": "2026-09-22",
+      "type": "triaged",
+      "description": "Same DoesDbTableExist query (information_schema.tables WHERE table_schema = <database name>) exists in the fork, but two guards defuse it: the #1784 direct 'select 1 from <table> where 1=0' fallback finds the tables anyway, and SqlConnectionsLoader.Load() null-coalesces missing metadata into HandleFirstRun, so no NRE and no schema wipe. Query is still semantically wrong on MSSQL/PostgreSQL (schema != catalog) and costs one extra round-trip per table; candidate cleanup: match table_catalog OR table_schema.",
+      "pr": null,
+      "branch": null,
+      "release": null,
+      "comment_posted": false
+    }
+  ],
   "comments": [
     {
       "id": "IC_kwDOAAcIMM8AAAABV1KWZw",
@@ -29,6 +40,6 @@
   "unread_comments": 1,
   "needs_action": true,
   "waiting_for_us": true,
-  "last_synced": "2026-09-22T06:02:02Z",
-  "notes": ""
+  "last_synced": "2026-09-22T13:05:51Z",
+  "notes": "eran132 diagnosed upstream root cause (TABLE_SCHEMA vs TABLE_CATALOG). Fork mitigated, not fixed. Triaged 2026-09-22."
 }

@@ -8,17 +8,28 @@
   "created_at": "2026-09-21T11:49:10Z",
   "github_updated_at": "2026-09-21T11:49:10Z",
   "body_snippet": "## Summary\n\nIn an x64 framework-dependent build, `Assemblies\\Microsoft.Data.SqlClient.SNI.dll` is the **x86** binary (PE machine `0x14c`). Any SQL Server connection therefore fails as soon as the driver initializes:\n\n```\nSystem.TypeInitializationException: The type initializer for 'Microsoft.Data.SqlClient.TdsParser' threw an exception.\n ---> System.TypeInitializationException: The type initializer for 'Microsoft.Data.SqlClient.SNILoadHandle' threw an exception.\n ---> System.BadImageFormatExcept...",
-  "our_status": "new",
-  "priority": null,
+  "our_status": "released",
+  "priority": "P2-bug",
   "target_release": null,
   "our_branch": null,
   "our_pr": null,
-  "iterations": [],
+  "iterations": [
+    {
+      "seq": 1,
+      "date": "2026-09-22",
+      "type": "released",
+      "description": "Not affected: fork does not flatten NuGet copy-local into Assemblies\\; SNI natives ship under runtimes/win-{x64,x86,arm64}/native (v1.83.0 zip checked, win-x64 PE machine 0x8664) and the live SQL Server integration tests pass.",
+      "pr": null,
+      "branch": null,
+      "release": null,
+      "comment_posted": false
+    }
+  ],
   "comments": [],
   "comments_cursor": "2026-09-21T11:49:10Z",
   "unread_comments": 0,
   "needs_action": true,
   "waiting_for_us": true,
-  "last_synced": "2026-09-22T06:02:02Z",
-  "notes": ""
+  "last_synced": "2026-09-22T13:05:51Z",
+  "notes": "Upstream-only bug (Assemblies\\ flattening). Verified 2026-09-22 against v1.83.0 x64 zip."
 }
