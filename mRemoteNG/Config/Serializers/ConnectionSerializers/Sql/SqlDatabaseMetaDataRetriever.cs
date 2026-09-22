@@ -209,13 +209,21 @@ namespace mRemoteNG.Config.Serializers.ConnectionSerializers.Sql
 
             try
             {
-                // ANSI SQL way.  Works in PostgreSQL, MSSQL, MySQL.
+                // ANSI SQL way.  Works in PostgreSQL, MSSQL, MySQL — but the column that
+                // holds the database name differs: MySQL puts it in table_schema (there is no
+                // separate catalog), SQL Server and PostgreSQL put it in table_catalog and use
+                // table_schema for the schema ("dbo", "public"). Matching only table_schema
+                // therefore never finds anything on SQL Server, and only the direct-select
+                // fallback below stopped that from being read as "no tables here" (upstream
+                // #3498). Accept the name in either column; the parameter is passed twice
+                // because ODBC markers are positional.
                 string database_name = Properties.OptionsDBsPage.Default.SQLDatabaseName;
                 DbCommand cmd = databaseConnector.DbCommand(
                     "select case when exists((select * from information_schema.tables where table_name = "
                     + ParameterMarker(databaseConnector, "@TableName")
-                    + " and table_schema = " + ParameterMarker(databaseConnector, "@DatabaseName")
-                    + ")) then 1 else 0 end");
+                    + " and (table_schema = " + ParameterMarker(databaseConnector, "@DatabaseName")
+                    + " or table_catalog = " + ParameterMarker(databaseConnector, "@DatabaseCatalog")
+                    + "))) then 1 else 0 end");
 
                 DbParameter tableNameParam = cmd.CreateParameter();
                 tableNameParam.ParameterName = "@TableName";
@@ -226,6 +234,11 @@ namespace mRemoteNG.Config.Serializers.ConnectionSerializers.Sql
                 databaseNameParam.ParameterName = "@DatabaseName";
                 databaseNameParam.Value = database_name;
                 cmd.Parameters.Add(databaseNameParam);
+
+                DbParameter databaseCatalogParam = cmd.CreateParameter();
+                databaseCatalogParam.ParameterName = "@DatabaseCatalog";
+                databaseCatalogParam.Value = database_name;
+                cmd.Parameters.Add(databaseCatalogParam);
 
                 short cmdResult = Convert.ToInt16(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
                 exists = (cmdResult == 1);

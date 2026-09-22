@@ -86,5 +86,43 @@ namespace mRemoteNGTests.Config.Serializers.ConnectionSerializers.Sql
             _mockTransaction.Received(1).Rollback();
             _mockTransaction.DidNotReceive().Commit();
         }
+
+        /// <summary>
+        /// The table-existence probe used to match the database name against
+        /// information_schema.tables.table_schema only. That is where MySQL keeps it; SQL Server
+        /// and PostgreSQL keep it in table_catalog and use table_schema for "dbo"/"public", so on
+        /// those the probe never matched and only the direct-select fallback kept the load from
+        /// concluding the schema was missing (upstream #3498). Both columns are accepted now.
+        /// </summary>
+        [Test]
+        public void GetDatabaseMetaData_TableExistenceProbe_AcceptsDatabaseNameInSchemaOrCatalog()
+        {
+            var commandTexts = new System.Collections.Generic.List<string>();
+            var parameters = new System.Collections.Generic.List<DbParameter>();
+            _mockConnector.DbCommand(Arg.Do<string>(commandTexts.Add)).Returns(_mockCommand);
+            _mockParameterCollection.Add(Arg.Do<object>(p => parameters.Add((DbParameter)p)));
+
+            try
+            {
+                _retriever.GetDatabaseMetaData(_mockConnector);
+            }
+            catch (Exception)
+            {
+                // Everything past the probe runs against substitutes and is not under test here.
+            }
+
+            string probe = commandTexts.Find(t => t.Contains("information_schema.tables", StringComparison.OrdinalIgnoreCase));
+            Assert.That(probe, Is.Not.Null, "no table-existence probe was issued");
+            Assert.Multiple(() =>
+            {
+                Assert.That(probe, Does.Contain("table_schema = @DatabaseName"));
+                Assert.That(probe, Does.Contain("or table_catalog = @DatabaseCatalog"));
+                Assert.That(parameters.Count, Is.GreaterThanOrEqualTo(3));
+                Assert.That(parameters[0].ParameterName, Is.EqualTo("@TableName"));
+                Assert.That(parameters[1].ParameterName, Is.EqualTo("@DatabaseName"));
+                Assert.That(parameters[2].ParameterName, Is.EqualTo("@DatabaseCatalog"));
+                Assert.That(parameters[2].Value, Is.EqualTo(parameters[1].Value));
+            });
+        }
     }
 }
