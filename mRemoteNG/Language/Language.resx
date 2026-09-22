@@ -2632,6 +2632,21 @@ mRemoteNG will now quit and begin with the installation.</value>
   <data name="ECPLAPSQueryFailed" xml:space="preserve">
     <value>LAPS query failed</value>
   </data>
+  <data name="ExternalConnectorsMissing" xml:space="preserve">
+    <value>{0} could not be loaded, so no connection can be opened.
+Expected at: {1}
+{2}
+
+This library ships with mRemoteNG. If the file is gone, an antivirus (for example Windows Defender) has most likely quarantined it: check its protection history, restore the file, and consider an exclusion for this folder. Otherwise re-extract the release and compare the files with checksums-SHA256.txt.
+
+Loader: {3}</value>
+  </data>
+  <data name="ExternalConnectorsFileGone" xml:space="preserve">
+    <value>The file is not there.</value>
+  </data>
+  <data name="ExternalConnectorsPresentButUnloadable" xml:space="preserve">
+    <value>The file is there but the runtime refused it (damaged, blocked, or from a different build).</value>
+  </data>
   <data name="EAPAmazonWebServices" xml:space="preserve">
     <value>AmazonEC2</value>
   </data>

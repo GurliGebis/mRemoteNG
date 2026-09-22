@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using mRemoteNG.App;
 using mRemoteNG.Connection.Protocol;
 using mRemoteNG.Container;
+using mRemoteNG.Tools;
 using mRemoteNG.Messages;
 using mRemoteNG.Properties;
 using mRemoteNG.UI.Forms;
@@ -114,6 +115,21 @@ namespace mRemoteNG.Connection
                 return;
             }
 
+            // The connect path references types from ExternalConnectors.dll, so the runtime must
+            // load that assembly before it can even compile the method below. When the file has
+            // been quarantined (#175/#191/#192) that load fails inside the JIT, before any
+            // try/catch exists to see it, and the process dies. Ask first, from a method that has
+            // no such reference, and turn the answer into a message rather than a crash.
+            if (!ExternalConnectorsAssembly.EnsureAvailable(Runtime.MessageCollector))
+                return;
+
+            await OpenConnectionCoreAsync(connectionInfo, force, conForm);
+        }
+
+        private async Task OpenConnectionCoreAsync(ConnectionInfo connectionInfo,
+                                                   ConnectionInfo.Force force,
+                                                   ConnectionWindow? conForm)
+        {
             try
             {
                 ConnectionInfo connectionInfoOriginal = connectionInfo;
@@ -144,15 +160,9 @@ namespace mRemoteNG.Connection
 
                 if (!useAlternativeAddress && !string.IsNullOrEmpty(connectionInfo.EC2InstanceId))
                 {
-                    try
-                    {
-                        string host = await ExternalConnectors.AWS.EC2FetchDataService.GetEC2InstanceDataAsync("AWSAPI:" + connectionInfo.EC2InstanceId, connectionInfo.EC2Region);
-                        if (!string.IsNullOrEmpty(host))
-                            connectionInfo.Hostname = host;
-                    }
-                    catch
-                    {
-                    }
+                    string? host = await ResolveEc2HostAsync(connectionInfo);
+                    if (!string.IsNullOrEmpty(host))
+                        connectionInfo.Hostname = host;
                 }
 
                 if (string.IsNullOrEmpty(connectionInfo.Hostname))
@@ -350,6 +360,28 @@ namespace mRemoteNG.Connection
             catch (Exception ex)
             {
                 Runtime.MessageCollector.AddExceptionStackTrace(Language.ConnectionOpenFailed, ex);
+            }
+        }
+
+        /// <summary>
+        /// The one call on the connect path that binds to ExternalConnectors.dll, kept in a method
+        /// of its own so the assembly is not a precondition for compiling the whole of
+        /// <see cref="OpenConnectionCoreAsync"/>. A lookup that fails leaves the hostname as
+        /// configured, as before, but now says so instead of swallowing the reason.
+        /// </summary>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static async Task<string?> ResolveEc2HostAsync(ConnectionInfo connectionInfo)
+        {
+            try
+            {
+                return await ExternalConnectors.AWS.EC2FetchDataService
+                    .GetEC2InstanceDataAsync("AWSAPI:" + connectionInfo.EC2InstanceId, connectionInfo.EC2Region);
+            }
+            catch (Exception ex)
+            {
+                Runtime.MessageCollector.AddMessage(MessageClass.WarningMsg,
+                    $"EC2 lookup for '{connectionInfo.EC2InstanceId}' failed, using the configured hostname: {ex.Message}");
+                return null;
             }
         }
 

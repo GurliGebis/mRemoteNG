@@ -1988,6 +1988,33 @@ namespace mRemoteNG.Resources.Language {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to {0} could not be loaded, so no connection can be opened..
+        /// </summary>
+        internal static string ExternalConnectorsMissing {
+            get {
+                return ResourceManager.GetString("ExternalConnectorsMissing", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The file is not there..
+        /// </summary>
+        internal static string ExternalConnectorsFileGone {
+            get {
+                return ResourceManager.GetString("ExternalConnectorsFileGone", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The file is there but the runtime refused it (damaged, blocked, or from a different build)..
+        /// </summary>
+        internal static string ExternalConnectorsPresentButUnloadable {
+            get {
+                return ResourceManager.GetString("ExternalConnectorsPresentButUnloadable", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to 1Password.
         /// </summary>
         internal static string ECPOnePassword {
