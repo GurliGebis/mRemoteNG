@@ -6,7 +6,7 @@
   "labels": [],
   "author": "bruste77",
   "created_at": "2026-09-16T12:30:11Z",
-  "github_updated_at": "2026-09-18T07:38:25Z",
+  "github_updated_at": "2026-09-21T05:19:04Z",
   "body_snippet": "# Host reachability status icon shows \"Reachable\" for offline/unreachable hosts (false positives behind Zscaler/ZTNA), plus related bugs found and fixed along the way\n\n## Summary\n\nThe connection tree (and a separate button in the Config panel) show a reachability icon\n(online/offline) per connection, computed by `mRemoteNG/Tools/HostStatusMonitor.cs` (see issue\n#1109). The original implementation determined reachability with a single, weak check: open a raw\nTCP connection to the host's port and ...",
   "our_status": "needs_info",
   "priority": null,
@@ -52,12 +52,21 @@
       "is_ours": false,
       "analyzed": false,
       "action_needed": true
+    },
+    {
+      "id": "IC_kwDORKxwDc8AAAABVxHqgA",
+      "author": "robertpopa22",
+      "date": "2026-09-21T05:19:04Z",
+      "snippet": "Thank you for the patch and for the two answers — \"powered off, still green\" is the case that matters, and it decides the remedy.\n\nBoth parts are in `main` and will be in the next nightly.\n\n**Your icon-cache patch is in, credited to you** (it needed re-applying by hand — the file had moved since the nightly you cut it against — but the change is yours line for line). We wrote a test around it before applying it, and the test does what you described: with an open tab on a connection, the tree ask...",
+      "is_ours": true,
+      "analyzed": false,
+      "action_needed": false
     }
   ],
-  "comments_cursor": "2026-09-18T07:38:25Z",
+  "comments_cursor": "2026-09-21T05:19:04Z",
   "unread_comments": 2,
   "needs_action": true,
-  "waiting_for_us": true,
-  "last_synced": "2026-09-20T20:37:19Z",
+  "waiting_for_us": false,
+  "last_synced": "2026-09-22T06:02:02Z",
   "notes": "Both premises verified in source: HostStatusMonitor.IsReachableAsync is a bare TCP connect, and ConfigWindow has a second independent one. No patch attached; asked for PR + whether host is powered off vs port closed."
 }
