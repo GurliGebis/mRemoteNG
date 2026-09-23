@@ -1483,10 +1483,14 @@ namespace mRemoteNG.Connection.Protocol.RDP
                 Runtime.MessageCollector.AddExceptionStackTrace(Language.RdpSetRedirectionFailed, ex);
             }
 
-            // Extended settings — silent fallback: older MSTSC versions may not expose these.
-            // Required Windows build for WebAuthn: Win10 20H1+. Required for Entra ID: Win10 22H2 / Win11.
-            SetExtendedProperty("RedirectWebAuthn", connectionInfo.RedirectWebAuthn, silent: true);
-            SetExtendedProperty("EnableRdsAadAuth", connectionInfo.EnableRdsAadAuth, silent: true);
+            // Not silenced (#196): unlike the scale-factor properties below, a rejected
+            // WebAuthn/Entra ID property is the whole story when Entra ID sign-in never appears -
+            // the connection just falls back to a normal auth negotiation and fails instantly with
+            // no other trace. Required Windows build for WebAuthn: Win10 20H1+. Required for Entra
+            // ID: Win10 22H2 / Win11. If the client is older than that, this now logs a warning
+            // explaining why instead of failing silently.
+            SetExtendedProperty("RedirectWebAuthn", connectionInfo.RedirectWebAuthn);
+            SetExtendedProperty("EnableRdsAadAuth", connectionInfo.EnableRdsAadAuth);
 
             try
             {
