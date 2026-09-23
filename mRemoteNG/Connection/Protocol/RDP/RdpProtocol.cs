@@ -751,7 +751,19 @@ namespace mRemoteNG.Connection.Protocol.RDP
 
             if (RdpVersion >= Versions.RDC61)
             {
-                _rdpClient.AdvancedSettings7.EnableCredSspSupport = connectionInfo.UseCredSsp;
+                // Entra ID auth doesn't ride on CredSSP/NLA - it explicitly disables it and
+                // negotiates plain RDP security instead, then authenticates in-band once
+                // connected (confirmed against a real target via a working reference client's
+                // trace: enablecredsspsupport=0, UseRdpSecurityLayer=1, i.e. NegotiateSecurityLayer
+                // =false, is exactly what a successful Entra ID connection sends - #196). Setting
+                // both on the same AdvancedSettings7 instance, CredSSP first, matches the ordering
+                // that avoids E_INVALIDARG on NegotiateSecurityLayer.
+                var advancedSettings7 = _rdpClient.AdvancedSettings7;
+                advancedSettings7.EnableCredSspSupport = !connectionInfo.EnableRdsAadAuth && connectionInfo.UseCredSsp;
+                if (connectionInfo.EnableRdsAadAuth)
+                {
+                    advancedSettings7.NegotiateSecurityLayer = false;
+                }
             }
             
             SetUseConsoleSession();
@@ -1491,6 +1503,20 @@ namespace mRemoteNG.Connection.Protocol.RDP
             // explaining why instead of failing silently.
             SetExtendedProperty("RedirectWebAuthn", connectionInfo.RedirectWebAuthn);
             SetExtendedProperty("EnableRdsAadAuth", connectionInfo.EnableRdsAadAuth);
+
+            if (connectionInfo.EnableRdsAadAuth)
+            {
+                // The rest of what a working Entra ID connection needs, per a working reference
+                // client's own trace against a real target (#196): the control only loads its
+                // internal aadWamExtension.dll and completes the web sign-in once it has an
+                // explicit answer for the local device's own AAD-join state, not just the
+                // enable flag. mRemoteNG has no way to know the true join state here, and the
+                // overwhelming majority of connections are from a non-joined client, so that's
+                // what's sent - same as the reference trace (LocalDeviceIsAADJoined=0).
+                SetExtendedProperty("LocalDeviceIsAADJoined", false);
+                SetExtendedProperty("LocalDeviceAADTenantId", "");
+                SetExtendedProperty("AllowedSecurityProtocols", "*");
+            }
 
             try
             {

@@ -34,6 +34,7 @@ public class RemoteDesktopConnectionDeserializerTests
     private const string ExpectedStartProgram = "alternate shell";
     private const bool ExpectedEnableRdsAadAuth = true;
     private const bool ExpectedRedirectWebAuthn = true;
+    private const bool ExpectedUseCredSsp = false;
 
     [OneTimeSetUp]
     public void OnetimeSetup()
@@ -198,6 +199,17 @@ public class RemoteDesktopConnectionDeserializerTests
     {
         var connectionInfo = _connectionTreeModel.RootNodes.First().Children.First();
         Assert.That(connectionInfo.RedirectWebAuthn, Is.EqualTo(ExpectedRedirectWebAuthn));
+    }
+
+    [Test]
+    public void UseCredSspImportedCorrectly()
+    {
+        // enablecredsspsupport:i:0 in the fixture must override the connection default
+        // (ConDefaultUseCredSsp is true), proving the value actually came from the file (#196:
+        // a working Entra ID connection needs CredSSP off, and the import was silently
+        // dropping this key too).
+        var connectionInfo = _connectionTreeModel.RootNodes.First().Children.First();
+        Assert.That(connectionInfo.UseCredSsp, Is.EqualTo(ExpectedUseCredSsp));
     }
 
     //[Test]

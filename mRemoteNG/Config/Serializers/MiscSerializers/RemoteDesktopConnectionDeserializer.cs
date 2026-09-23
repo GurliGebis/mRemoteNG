@@ -200,6 +200,9 @@ namespace mRemoteNG.Config.Serializers.MiscSerializers
                 case "redirectwebauthn":
                     connectionInfo.RedirectWebAuthn = string.Equals(value, "1", StringComparison.Ordinal);
                     break;
+                case "enablecredsspsupport":
+                    connectionInfo.UseCredSsp = string.Equals(value, "1", StringComparison.Ordinal);
+                    break;
             }
         }
     }
