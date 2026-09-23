@@ -32,6 +32,8 @@ public class RemoteDesktopConnectionDeserializerTests
     private const bool ExpectedPrinterRedirection = true;
     private const RDPSounds ExpectedSoundRedirection = RDPSounds.BringToThisComputer;
     private const string ExpectedStartProgram = "alternate shell";
+    private const bool ExpectedEnableRdsAadAuth = true;
+    private const bool ExpectedRedirectWebAuthn = true;
 
     [OneTimeSetUp]
     public void OnetimeSetup()
@@ -179,6 +181,23 @@ public class RemoteDesktopConnectionDeserializerTests
     {
         var connectionInfo = _connectionTreeModel.RootNodes.First().Children.First();
         Assert.That(connectionInfo.RDPStartProgram, Is.EqualTo(ExpectedStartProgram));
+    }
+
+    [Test]
+    public void EnableRdsAadAuthImportedCorrectly()
+    {
+        // .rdp files with Entra ID (Azure AD) authentication enabled must not silently lose that
+        // setting on import (#196) - it previously had no case in the deserializer's switch and
+        // always fell back to the disabled default.
+        var connectionInfo = _connectionTreeModel.RootNodes.First().Children.First();
+        Assert.That(connectionInfo.EnableRdsAadAuth, Is.EqualTo(ExpectedEnableRdsAadAuth));
+    }
+
+    [Test]
+    public void RedirectWebAuthnImportedCorrectly()
+    {
+        var connectionInfo = _connectionTreeModel.RootNodes.First().Children.First();
+        Assert.That(connectionInfo.RedirectWebAuthn, Is.EqualTo(ExpectedRedirectWebAuthn));
     }
 
     //[Test]

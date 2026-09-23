@@ -194,6 +194,12 @@ namespace mRemoteNG.Config.Serializers.MiscSerializers
                 case "alternate shell":
                     connectionInfo.RDPStartProgram = value;
                     break;
+                case "enablerdsaadauth":
+                    connectionInfo.EnableRdsAadAuth = string.Equals(value, "1", StringComparison.Ordinal);
+                    break;
+                case "redirectwebauthn":
+                    connectionInfo.RedirectWebAuthn = string.Equals(value, "1", StringComparison.Ordinal);
+                    break;
             }
         }
     }
