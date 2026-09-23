@@ -755,14 +755,15 @@ namespace mRemoteNG.Connection.Protocol.RDP
                 // negotiates plain RDP security instead, then authenticates in-band once
                 // connected (confirmed against a real target via a working reference client's
                 // trace: enablecredsspsupport=0, UseRdpSecurityLayer=1, i.e. NegotiateSecurityLayer
-                // =false, is exactly what a successful Entra ID connection sends - #196). Setting
-                // both on the same AdvancedSettings7 instance, CredSSP first, matches the ordering
-                // that avoids E_INVALIDARG on NegotiateSecurityLayer.
-                var advancedSettings7 = _rdpClient.AdvancedSettings7;
-                advancedSettings7.EnableCredSspSupport = !connectionInfo.EnableRdsAadAuth && connectionInfo.UseCredSsp;
+                // =false, is exactly what a successful Entra ID connection sends - #196).
+                _rdpClient.AdvancedSettings7.EnableCredSspSupport = !connectionInfo.EnableRdsAadAuth && connectionInfo.UseCredSsp;
                 if (connectionInfo.EnableRdsAadAuth)
                 {
-                    advancedSettings7.NegotiateSecurityLayer = false;
+                    // Not on IMsRdpClientAdvancedSettingsN in every redistributable (the numbered
+                    // interop interfaces don't cleanly inherit despite the naming) - the extended
+                    // property bag is the one path guaranteed present since RestrictedLogon etc.
+                    // already rely on it above.
+                    SetExtendedProperty("NegotiateSecurityLayer", false);
                 }
             }
             
